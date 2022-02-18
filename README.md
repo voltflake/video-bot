@@ -1,8 +1,9 @@
 # Discord bot which replies with video to TikTok link
 ### ✅ Still works fine
-- [X] No TikTok watermark on videos
-- [X] Supports multiple links in one message
+- [X] Lets everyone view the video directly in Discord
 - [X] Sends videos as reply to original message
+- [X] Supports multiple links in one message
+- [X] No TikTok watermark on videos
 
 If you encountered a problem or want some help feel free to sumbit an issue
 
