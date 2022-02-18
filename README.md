@@ -3,6 +3,8 @@ To build it you need node.js and npm (or other node.js package manager) installe
 Works fine on arm64 under **RasbianOS** and x86_64 under **Windows 11**  
 Tested with node.js `16.14.0` and `17.5.0`
 
+If you encontered a problem or want some help/feedback feel free to sumbit an issue.
+
 # Installation 
 Don't forget to place your bot token in main.js
 ```
