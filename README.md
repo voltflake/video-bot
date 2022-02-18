@@ -1,6 +1,6 @@
 # Discord bot which replies with video to tiktok url
 To build it you need node.js and npm (or other node.js package manager) installed on your system\
-Should work fine on arm and x86 hardware with modern node.js version
+Should work fine on arm64 and x86 hardware with modern node.js version
 
 # Installation 
 Don't forget to place bot token in main.js
