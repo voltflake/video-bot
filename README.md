@@ -4,7 +4,7 @@ To build it you need node.js and npm (or other node.js package manager) installe
 Tested with node.js `16.14.0` and `17.5.0`  
 Works fine on arm64 under **RasbianOS** and x86_64 under **Windows 11**
 
-If you encontered a problem or want some help/feedback feel free to sumbit an issue.
+If you encountered a problem or want some help/feedback feel free to sumbit an issue.
 
 ![Bot in action](preview.gif)
 
