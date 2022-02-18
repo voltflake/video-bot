@@ -1,14 +1,12 @@
 # Discord bot which replies with video to TikTok URL
-<img src="preview.gif"  align="right" height="380px"/>
-To build it you need node.js and npm (or other node.js package manager)
-
-installed on your system.
-
+To build it you need node.js and npm (or other node.js package manager) installed on your system.
 
 Tested with node.js `16.14.0` and `17.5.0`  
 Works fine on arm64 under **RasbianOS** and x86_64 under **Windows 11**
 
 If you encontered a problem or want some help/feedback feel free to sumbit an issue.
+
+![Bot in action](preview.gif)
 
 Installation 
 ---
