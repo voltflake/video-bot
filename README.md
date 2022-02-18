@@ -12,11 +12,11 @@ npm install
 node main.js
 ```
 # Autorun on linux
-If you're on linux you can also set crontab to run this bot at startup\
+If you're on linux you can also set crontab to run this bot at startup
 ```
 crontab -e
 ```
-And write this line in that file, replacing `danyil` with your username\
+And write this line in that file, replacing `danyil` with your username
 ```
 @reboot cd /home/danyil/tiktok-to-discord/ ; node main.js
 ```
