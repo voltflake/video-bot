@@ -6,7 +6,7 @@ Works fine on arm64 under **RasbianOS** and x86_64 under **Windows 11**
 
 If you encontered a problem or want some help/feedback feel free to sumbit an issue.
 
-<img src="preview.gif" width="100%" title="Bot in action">
+![Bot in action](preview.gif)
 
 Installation 
 ---
