@@ -19,9 +19,9 @@ client.on('messageCreate', async msg => {
         console.log("Recieved tiktok link!");
         try {
             msg.channel.sendTyping();
-            // Get links to video file
+            // Get links to videos by tiktok url
             let links = await tiktok.tiktokdownload(url);
-            // Donwload video using no-watermark
+            // Download video using no-watermark link
             let response = await axios.get(links.nowm, {responseType: "arraybuffer"});
             // Send discord reply with video
             await msg.reply({files: [{attachment: response.data, name: "video.mp4"}], allowedMentions: {repliedUser: false}});
