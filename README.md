@@ -4,7 +4,7 @@ Works fine on arm64 under **RasbianOS** and x86_64 under **Windows 11**
 Tested with node.js `16.14.0` and `17.5.0`
 
 # Installation 
-Don't forget to place bot token in main.js
+Don't forget to place your bot token in main.js
 ```
 cd ~
 git clone https://github.com/danyildiabin/tiktok-to-discord
