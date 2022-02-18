@@ -1,35 +1,36 @@
-// constants
+// Place your bot token here
 const bot_token = "";
 
-// dependencies
+// Dependencies
 const tiktok = require("tiktok-scraper-without-watermark");
 const axios = require("axios");
 const URI = require("urijs");
 const { Client, Intents } = require("discord.js");
 
-// driver code
+// Driver code
 const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES] });
 client.login(bot_token);
 
-// event handlers
+// Event handlers
 client.on('messageCreate', async msg => {
     if (!msg.content) return;
-    console.log("recieved message")
     URI.withinString(msg.content, async (url) => {
         if (!url.includes("tiktok.com")) return;
+        console.log("Recieved tiktok link!");
         try {
             msg.channel.sendTyping();
-            // get links to video file
+            // Get links to video file
             let links = await tiktok.tiktokdownload(url);
-            // donwload video with no-watermark link
+            // Donwload video using no-watermark
             let response = await axios.get(links.nowm, {responseType: "arraybuffer"});
-            // send discord reply with video
-            await msg.reply({files: [{attachment: response.data, name: "video.mp4"}], allowedMentions: {repliedUser: false}})
+            // Send discord reply with video
+            await msg.reply({files: [{attachment: response.data, name: "video.mp4"}], allowedMentions: {repliedUser: false}});
         } catch (err) {
-            console.log(err, url);
             try {
-                await msg.reply({content: `errorwhen downloading tiktok: ${err}`});
-            } catch (err) {}
+                await msg.reply({content: `error when downloading tiktok: ${err}`, allowedMentions: {repliedUser: false}});
+            } catch (err) {
+                console.log("Something Went Horribly Wrong!");
+            }
         }
     });
 });
