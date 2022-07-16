@@ -1,5 +1,5 @@
 # Discord bot which replies with video to TikTok link
-### Current status: ✅ Still works fine
+### Current status: ~~✅ Still works fine~~ dependency is broken, will fix it soon
 - [X] Lets everyone view the video directly in Discord
 - [X] Sends videos as reply to original message
 - [X] Supports multiple links in one message
