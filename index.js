@@ -3,7 +3,7 @@ const bot_token = "";
 
 // Dependencies
 const axios = require("axios");
-const ffprobeStatic = require('ffprobe-static');
+const ffprobe_path = require('@ffprobe-installer/ffprobe').path;
 const ffmpeg_path = require('ffmpeg-static');
 const scraper = require('tiktok-scraper-without-watermark');
 const { Client, Intents } = require("discord.js");
@@ -55,7 +55,7 @@ client.on('messageCreate', async msg => {
                 msg.channel.sendTyping();
                 await status.update(i, "Video is too large, compressing...");
                 await fs.writeFile("temp.mp4", video);
-                let info = await ffprobe('temp.mp4', { path: ffprobeStatic.path });
+                let info = await ffprobe('temp.mp4', { path: ffprobe_path });
                 const duration = info.streams[0].duration;
                 const audio_bitrate = info.streams[1].bit_rate;
                 const video_bitrate = Math.floor((67108864 - duration * audio_bitrate - 1 * 1024 * 1024 * 8) / duration);
