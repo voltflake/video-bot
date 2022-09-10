@@ -84,7 +84,7 @@ bot.on("messageCreate", async (msg) => {
         let info = await ffprobe('temp.mp4', { path: ffprobe_path });
         const duration: number = info.streams[0].duration;
         const audio_bitrate: number = info.streams[1].bit_rate;
-        const video_bitrate: number = Math.floor((67108864 - duration * audio_bitrate - 1 * 1024 * 1024 * 8) / duration);
+        const video_bitrate: number = Math.floor((8_388_608 * 8 - duration * audio_bitrate - 2 * 1024 * 1024 * 8) / duration);
         const ffmpeg_path = config.use_ffmpeg_from_PATH ? "ffmpeg" : ffmpeg_portable;
         execSync(ffmpeg_path + " -i temp.mp4 -y -b:v " + video_bitrate + " -vcodec libx264 -profile:v baseline out.mp4");
         video = Buffer.from(fs.readFileSync("out.mp4").buffer);
@@ -202,12 +202,16 @@ async function tiktokToVideo(url: string): Promise<ExtractedLinks> {
         // Extract link from results page
         // TODO: extraction is too unreliable, should be using button text insted of blindly extracted links
         const result = await axios(config);
-        const links_rexex = result.data.match(/(?<=target="_blank"[\s|rel="noreferrer"]+href=")[^"]+/g);
+        const links_regex = result.data.match(/(?<=target="_blank"[\s|rel="noreferrer"]+href=")[^"]+/g);
+        if (links_regex.length !== 5) {
+            reject("found too few links, video is probably private");
+            return;
+        }
         const links: ExtractedLinks = {
-            source1: links_rexex[0],
-            source2: links_rexex[2],
-            embed_ready: links_rexex[3].match(/^[^&]+/g)[0],
-            with_watermark: links_rexex[4]
+            source1: links_regex[0],
+            source2: links_regex[2],
+            embed_ready: links_regex[3].match(/^[^&]+/g)[0],
+            with_watermark: links_regex[4]
         };
         resolve(links);
     });
