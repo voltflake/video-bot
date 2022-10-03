@@ -72,7 +72,7 @@ bot.on("messageCreate", async (msg) => {
             continue;
         }
 
-        if (config.use_fast_mode_instead_of_copression == true) {
+        if (config.use_fast_mode_instead_of_compression == true) {
             await msg.reply({ content: video_urls.embed_ready, allowedMentions: { repliedUser: false } });
             await status.update(i, "Done.");
             continue
