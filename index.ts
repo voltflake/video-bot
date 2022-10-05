@@ -3,7 +3,7 @@ import fs from "fs";
 import axios from "axios";
 // change "musicaldown" to "direct" if service is expiriencing outage
 // you have to do this manually for now, automatic selection is "work in progress"
-import { getVideoLink } from './backends/direct';
+import { getVideoLink } from './backends/musicaldown';
 import { Client, GatewayIntentBits, Message } from "discord.js";
 const ffprobe_portable = require('@ffprobe-installer/ffprobe').path;
 const execSync = require("child_process").execSync;
