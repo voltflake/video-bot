@@ -1,7 +1,9 @@
 // Dependencies
 import fs from "fs";
 import axios from "axios";
-import FormData from "form-data";
+// change "musicaldown" to "direct" if service is expiriencing outage
+// you have to do this manually for now, automatic selection is "work in progress"
+import { getVideoLink } from './backends/direct';
 import { Client, GatewayIntentBits, Message } from "discord.js";
 const ffprobe_portable = require('@ffprobe-installer/ffprobe').path;
 const execSync = require("child_process").execSync;
@@ -37,9 +39,9 @@ bot.on("messageCreate", async (msg) => {
 
         // Get video file URLs from tiktok link
         await status.update(i, "Getting video links...");
-        let video_urls: ExtractedLinks | null = null;
+        let video_url: string | null = null;
         try {
-            video_urls = await tiktokToVideo(link);
+            video_url = await getVideoLink(link);
         } catch (err) {
             await msg.reply({ content: "error getting when processing tiktok link, skipping...", allowedMentions: { repliedUser: false } });
             await status.update(i, "Error.");
@@ -48,7 +50,7 @@ bot.on("messageCreate", async (msg) => {
 
         // reply to user with quick url video and continue to next link
         if (config.fast_mode == true) {
-            await msg.reply({ content: video_urls.embed_ready, allowedMentions: { repliedUser: false } });
+            await msg.reply({ content: video_url!, allowedMentions: { repliedUser: false } });
             await status.update(i, "Done.");
             continue
         }
@@ -57,7 +59,7 @@ bot.on("messageCreate", async (msg) => {
         await status.update(i, "Downloading video...");
         let video: Buffer | undefined = undefined;
         try {
-            video = await downloadAvailableVideo(video_urls);
+            video = await downloadVideo(video_url!);
         } catch {
             await msg.reply({ content: "couldn't download video with any extracted links, skipping...", allowedMentions: { repliedUser: false } });
             await status.update(i, "Error.");
@@ -73,7 +75,7 @@ bot.on("messageCreate", async (msg) => {
         }
 
         if (config.use_fast_mode_instead_of_compression == true) {
-            await msg.reply({ content: video_urls.embed_ready, allowedMentions: { repliedUser: false } });
+            await msg.reply({ content: video_url!, allowedMentions: { repliedUser: false } });
             await status.update(i, "Done.");
             continue
         }
@@ -129,91 +131,15 @@ type BotConfig = {
     bot_token: string,
     fast_mode: boolean,
     use_ffmpeg_from_PATH: boolean,
-    use_fast_mode_instead_of_copression: boolean
-}
-
-type ExtractedLinks = {
-    source1?: string,
-    source2?: string,
-    embed_ready?: string,
-    with_watermark?: string
+    use_fast_mode_instead_of_compression: boolean
 }
 
 // Downloads best available video 
-async function downloadAvailableVideo(urls: ExtractedLinks): Promise<Buffer> {
+async function downloadVideo(url: string): Promise<Buffer> {
     return new Promise(async function (resolve, reject) {
-        let video_link: string | undefined = undefined;
-        if (urls.with_watermark != undefined) video_link = urls.with_watermark;
-        if (urls.source2 != undefined) video_link = urls.source2;
-        if (urls.source1 != undefined) video_link = urls.source1;
-        if (video_link == undefined) {
-            reject("There is no available links to download video");
-            return;
-        }
-        const response = await axios.get(video_link, { responseType: "arraybuffer" });
+        const response = await axios.get(url, { responseType: "arraybuffer" });
         resolve(response.data);
         return;
-    });
-}
-
-// Simulates user who goes to musicaldown.com to convert tiktok link to raw video link
-async function tiktokToVideo(url: string): Promise<ExtractedLinks> {
-    return new Promise(async function (resolve, reject) {
-
-        // Go to website to create needed tokens & cookies
-        const init_response = await axios.get("https://musicaldown.com/id", {
-            headers: {
-                Accept: "*/*",
-                Referer: "https://musicaldown.com",
-                Origin: "https://musicaldown.com",
-            }
-        });
-
-        // Collect necessary data from main page to submit POST request later based on it
-        const inputs = init_response.data.match(/<input[^>]+>/g);
-        const tokens = {
-            link_key: inputs[0].match(/(?<=name=")[^"]+(?=")/g)[0],
-            session_key: inputs[1].match(/(?<=name=")[^"]+(?=")/g)[0],
-            session_value: inputs[1].match(/(?<=value=")[^"]+(?=")/g)[0],
-        };
-
-        // Make POST request
-        let form_data = new FormData();
-        form_data.append("verify", "1");
-        form_data.append(tokens.link_key, url);
-        form_data.append(tokens.session_key, tokens.session_value);
-        const sessiondata_regex = init_response.headers["set-cookie"]?.toString().match(/session_data=[^;]+(?=;)/g);
-        if (sessiondata_regex == undefined) {
-            reject("session cookies were not granted");
-            return;
-        }
-        const sessiondata_text = sessiondata_regex[0];
-        const config = {
-            method: "post",
-            url: "https://musicaldown.com/download",
-            headers: {
-                "Origin": "https://musicaldown.com",
-                "Referer": "https://musicaldown.com/id",
-                "Cookie": sessiondata_text,
-            },
-            data: form_data
-        };
-
-        // Extract link from results page
-        // TODO: extraction is too unreliable, should be using button text insted of blindly extracted links
-        const result = await axios(config);
-        const links_regex = result.data.match(/(?<=target="_blank"[\s|rel="noreferrer"]+href=")[^"]+/g);
-        if (links_regex.length !== 5) {
-            reject("found too few links, video is probably private");
-            return;
-        }
-        const links: ExtractedLinks = {
-            source1: links_regex[0],
-            source2: links_regex[2],
-            embed_ready: links_regex[3].match(/^[^&]+/g)[0],
-            with_watermark: links_regex[4]
-        };
-        resolve(links);
     });
 }
 
