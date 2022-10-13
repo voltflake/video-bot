@@ -1,21 +1,21 @@
 // Dependencies
 import fs from "fs";
 import axios from "axios";
-// change "musicaldown" to "direct" if service is expiriencing outage
-// you have to do this manually for now, automatic selection is "work in progress"
-import { getVideoLink } from './backends/musicaldown';
 import { Client, GatewayIntentBits, Message } from "discord.js";
 const ffprobe_portable = require('@ffprobe-installer/ffprobe').path;
 const execSync = require("child_process").execSync;
 const ffprobe = require('ffprobe');
 const ffmpeg_portable = require('ffmpeg-static');
+// backends
+import backend_musicaldown from './backends/musicaldown';
+import backend_direct from './backends/direct';
+
 
 // Driver code
 const bot = new Client({ intents: [GatewayIntentBits.GuildMessages | GatewayIntentBits.MessageContent | GatewayIntentBits.Guilds] });
 const config_json = fs.readFileSync("./config.json", { encoding: "utf8" })
 const config: BotConfig = JSON.parse(config_json);
 bot.login(config.bot_token);
-
 // Event handlers
 bot.on("messageCreate", async (msg) => {
     if (msg.content == undefined) return;
@@ -28,40 +28,53 @@ bot.on("messageCreate", async (msg) => {
     // Remove embeds from original message for cleaner look
     try {
         await msg.suppressEmbeds()
-    } catch (err) {
+    } catch {
         console.log("bot has no permission to remove embeds, silently skipping...");
     }
 
     let status = await new Status(msg, links.length).ready();
     // Process tiktok links
     for (let i = 0; i < links.length; i++) {
-        const link = links[i];
-
+        const link = new URL(links[i]);
         // Get video file URLs from tiktok link
-        await status.update(i, "Getting video links...");
-        let video_url: string | null = null;
-        try {
-            video_url = await getVideoLink(link);
-        } catch (err) {
-            await msg.reply({ content: "error getting when processing tiktok link, skipping...", allowedMentions: { repliedUser: false } });
-            await status.update(i, "Error.");
-            continue;
+        let video_url: string = "";
+        // TODO: better handle multiple backends
+        // try N times before giving up
+        const extraction_retries = 3;
+        for (let j = 0; j < extraction_retries; j++) {
+            await status.update(i, "Getting video link... Attempt " + (j + 1) + "/" + extraction_retries);
+            try {
+                video_url = await backend_musicaldown(link);
+            } catch (err) {
+                await status.update(i, "musicaldown backend failed, trying direct extraction...");
+                try {
+                    video_url = await backend_direct(link);
+                } catch (error) {
+                    await status.update(i, "Error.");
+                    continue;
+                }
+            }
+            let hostname = (new URL(video_url)).hostname;
+            // v58 server (v58.tiktokcdn.com) had bad links, may be fixed in future?
+            if (hostname == "v58.tiktokcdn.com") continue;
+            break;
         }
 
         // reply to user with quick url video and continue to next link
         if (config.fast_mode == true) {
-            await msg.reply({ content: video_url!, allowedMentions: { repliedUser: false } });
+            await msg.reply({ content: video_url, allowedMentions: { repliedUser: false } });
             await status.update(i, "Done.");
             continue
         }
 
         // download best video and upload to to discord manually
         await status.update(i, "Downloading video...");
-        let video: Buffer | undefined = undefined;
+        let video: Buffer;
+        // TODO retry N times until link is working
+        // TODO find a way to know video size prior to downloading
         try {
-            video = await downloadVideo(video_url!);
+            video = await downloadVideo(video_url);
         } catch {
-            await msg.reply({ content: "couldn't download video with any extracted links, skipping...", allowedMentions: { repliedUser: false } });
             await status.update(i, "Error.");
             continue;
         }
@@ -75,7 +88,7 @@ bot.on("messageCreate", async (msg) => {
         }
 
         if (config.use_fast_mode_instead_of_compression == true) {
-            await msg.reply({ content: video_url!, allowedMentions: { repliedUser: false } });
+            await msg.reply({ content: video_url, allowedMentions: { repliedUser: false } });
             await status.update(i, "Done.");
             continue
         }
@@ -136,10 +149,14 @@ type BotConfig = {
 
 // Downloads best available video 
 async function downloadVideo(url: string): Promise<Buffer> {
-    return new Promise(async function (resolve, reject) {
-        const response = await axios.get(url, { responseType: "arraybuffer" });
-        resolve(response.data);
-        return;
+    return new Promise(async (resolve, reject) => {
+        try {
+            const response = await axios.get(url, { responseType: "arraybuffer" });
+            resolve(response.data);
+        } catch (error) {
+            console.error(error);
+            reject();
+        }
     });
 }
 
@@ -170,7 +187,9 @@ class Status {
         await this.status_message.edit({ content: this.raw_text, allowedMentions: { repliedUser: false } });
     }
 
+    // deletes status message if no errors occured
     async destroy() {
+        if (/Error/.test(this.raw_text)) return;
         await this.status_message.delete();
     }
 
