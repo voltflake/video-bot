@@ -1,21 +1,27 @@
 // Dependencies
-import fs from "fs";
-import axios from "axios";
-import { Client, GatewayIntentBits, Message } from "discord.js";
-const ffprobe_portable = require('@ffprobe-installer/ffprobe').path;
+// node.js packages
+import * as fs from "fs";
 const execSync = require("child_process").execSync;
+// networking
+import axios, { Axios } from "axios";
+import { Client, GatewayIntentBits, Message } from "discord.js";
+// ffmpeg packages
+const ffprobe_portable = require('@ffprobe-installer/ffprobe').path;
 const ffprobe = require('ffprobe');
 const ffmpeg_portable = require('ffmpeg-static');
 // backends
 import backend_musicaldown from './backends/musicaldown';
 import backend_direct from './backends/direct';
-
+let backends = new Array<{ (data: string): Promise<string> }>;
+backends.push(backend_musicaldown);
+backends.push(backend_direct);
 
 // Driver code
 const bot = new Client({ intents: [GatewayIntentBits.GuildMessages | GatewayIntentBits.MessageContent | GatewayIntentBits.Guilds] });
 const config_json = fs.readFileSync("./config.json", { encoding: "utf8" })
 const config: BotConfig = JSON.parse(config_json);
 bot.login(config.bot_token);
+
 // Event handlers
 bot.on("messageCreate", async (msg) => {
     if (msg.content == undefined) return;
@@ -35,47 +41,50 @@ bot.on("messageCreate", async (msg) => {
     let status = await new Status(msg, links.length).ready();
     // Process tiktok links
     for (let i = 0; i < links.length; i++) {
-        const link = new URL(links[i]);
-        // Get video file URLs from tiktok link
+        const tiktok_url = links[i];
+
+        // Get raw video URL from tiktok URL
+        await status.update(i, "Extracting video URL...");
         let video_url: string = "";
-        // TODO: better handle multiple backends
-        // try N times before giving up
-        const extraction_retries = 3;
-        for (let j = 0; j < extraction_retries; j++) {
-            await status.update(i, "Getting video link... Attempt " + (j + 1) + "/" + extraction_retries);
-            try {
-                video_url = await backend_musicaldown(link);
-            } catch (err) {
-                await status.update(i, "musicaldown backend failed, trying direct extraction...");
-                try {
-                    video_url = await backend_direct(link);
-                } catch (error) {
-                    await status.update(i, "Error.");
-                    continue;
-                }
-            }
-            let hostname = (new URL(video_url)).hostname;
-            // v58 server (v58.tiktokcdn.com) had bad links, may be fixed in future?
-            if (hostname == "v58.tiktokcdn.com") continue;
-            break;
+        try {
+            video_url = await getVideoUrl(tiktok_url);
+        } catch (error) {
+            console.error(error);
+            await status.update(i, "Error: Failed to extract video URL.");
+            continue;
         }
 
-        // reply to user with quick url video and continue to next link
+        // Reply with link if FastMode is enabled
         if (config.fast_mode == true) {
             await msg.reply({ content: video_url, allowedMentions: { repliedUser: false } });
             await status.update(i, "Done.");
             continue
         }
 
-        // download best video and upload to to discord manually
+        // Check if video is bigger than 8MB to skip download when compression disabled
+        if (config.use_fast_mode_instead_of_compression == true) {
+            await status.update(i, "Checking video size...");
+            try {
+                const response = await axios.head(video_url);
+                const size = parseInt(response.headers["content-length"]);
+                if (size > 8_388_608) {
+                    await msg.reply({ content: video_url, allowedMentions: { repliedUser: false } });
+                    await status.update(i, "Done.");
+                    continue;
+                }
+            } catch (error) {
+                console.error("failed to get video size prior to downloading, downloading anyway...")
+            }
+        }
+
+        // Download mp4 video
         await status.update(i, "Downloading video...");
         let video: Buffer;
-        // TODO retry N times until link is working
-        // TODO find a way to know video size prior to downloading
         try {
             video = await downloadVideo(video_url);
-        } catch {
-            await status.update(i, "Error.");
+        } catch (error) {
+            console.error(error);
+            await status.update(i, "Error: Failed to download video from extracted URL.");
             continue;
         }
 
@@ -87,30 +96,49 @@ bot.on("messageCreate", async (msg) => {
             continue;
         }
 
-        if (config.use_fast_mode_instead_of_compression == true) {
-            await msg.reply({ content: video_url, allowedMentions: { repliedUser: false } });
-            await status.update(i, "Done.");
-            continue
-        }
-
         await status.update(i, "Compressing video...");
         fs.writeFileSync("temp.mp4", video, { flag: "w+" });
         const ffprobe_path: string = config.use_ffmpeg_from_PATH ? "ffprobe" : ffprobe_portable;
         let info = await ffprobe('temp.mp4', { path: ffprobe_path });
         const duration: number = info.streams[0].duration;
         const audio_bitrate: number = info.streams[1].bit_rate;
-        const video_bitrate: number = Math.floor((8_388_608 * 8 - duration * audio_bitrate - 2 * 1024 * 1024 * 8) / duration);
+        const video_bitrate: number = Math.floor((67_108_864 - duration * audio_bitrate - 16_777_216) / duration);
         const ffmpeg_path = config.use_ffmpeg_from_PATH ? "ffmpeg" : ffmpeg_portable;
         execSync(ffmpeg_path + " -i temp.mp4 -y -b:v " + video_bitrate + " -vcodec libx264 -profile:v baseline out.mp4");
         video = Buffer.from(fs.readFileSync("out.mp4").buffer);
         await status.update(i, "Uploading video to Discord...");
         await msg.reply({ files: [{ attachment: video, name: "tiktok.mp4" }], allowedMentions: { repliedUser: false } });
         await status.update(i, "Done.");
+        fs.unlinkSync('./temp.mp4');
+        fs.unlinkSync('./out.mp4');
         continue;
         // TODO: implement better compression calculations for level 2 & 3 servers.
     }
     status.destroy();
 });
+
+async function getVideoUrl(tiktok_url: string): Promise<string> {
+    const retries_per_backend = 3;
+    return new Promise(async (resolve, reject) => {
+        for (let i = 0; i < backends.length; i++) {
+            const extractVideoURL = backends[i];
+            for (let j = 0; j < retries_per_backend; j++) {
+                try {
+                    let video_url = await extractVideoURL(tiktok_url);
+                    if (await checkLink(video_url))
+                        return resolve(video_url);
+                } catch (error) { }
+                continue;
+            }
+        }
+        return reject();
+    })
+}
+
+async function checkLink(url: string): Promise<boolean> {
+    const response = await fetch(url);
+    return response.ok;
+}
 
 bot.on("ready", async () => {
     console.log(`Logged in as ${bot.user?.tag}!`);
@@ -152,10 +180,10 @@ async function downloadVideo(url: string): Promise<Buffer> {
     return new Promise(async (resolve, reject) => {
         try {
             const response = await axios.get(url, { responseType: "arraybuffer" });
-            resolve(response.data);
+            return resolve(response.data);
         } catch (error) {
             console.error(error);
-            reject();
+            return reject();
         }
     });
 }

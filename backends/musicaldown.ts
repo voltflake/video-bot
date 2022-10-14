@@ -5,17 +5,18 @@ import FormData from "form-data";
 import axios from "axios";
 
 // Downloads best available video 
-export default async function getVideoLink(url: URL): Promise<string> {
+export default async function getVideoLink(tiktok_url: string): Promise<string> {
     try {
-        const html = await getData(url);
+        const html = await getData(tiktok_url);
         return extractLink(html);
-    } catch (err) {
-        throw err + "\nmusicaldown backend failed";
+    } catch (error) {
+        console.error("Musicaldown backend: " + error);
+        throw "musicaldown backend failed";
     }
 }
 
 // Gets html with links from service
-async function getData(url: URL): Promise<string> {
+async function getData(tiktok_url: string): Promise<string> {
     return new Promise<string>(async function (resolve, reject) {
 
         // Go to website to create needed tokens & cookies
@@ -38,13 +39,12 @@ async function getData(url: URL): Promise<string> {
         // Make POST request
         let form_data = new FormData();
         form_data.append("verify", "1");
-        form_data.append(tokens.link_key, url.toString());
+        form_data.append(tokens.link_key, tiktok_url);
         form_data.append(tokens.session_key, tokens.session_value);
 
         const sessiondata_regex = init_response.headers["set-cookie"]?.toString().match(/session_data=[^;]+(?=;)/g);
         if (sessiondata_regex == undefined) {
-            reject("session cookies were not granted");
-            return;
+            return reject("session cookies were not granted");
         }
         const sessiondata_text = sessiondata_regex[0];
 
@@ -59,7 +59,7 @@ async function getData(url: URL): Promise<string> {
             data: form_data
         };
         const response = await axios(config);
-        resolve(response.data);
+        return resolve(response.data);
     });
 }
 

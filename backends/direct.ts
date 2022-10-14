@@ -1,33 +1,34 @@
 // Scrapes video directly from tiktok.com page
 // Feel free to submit pull requests if you want to improve/fix this backend
+// Doesn't work atm because of tiktok's Web application firewall
 
 import axios from "axios";
 
 // main function
-export default async function getVideoLink(url: URL): Promise<string> {
+export default async function getVideoLink(tiktok_url: string): Promise<string> {
 	try {
-		const html = await getHTML(url);
+		const html = await getHTML(tiktok_url);
 		return extractVideoLink(html);
-	} catch (err) {
-		console.error(err);
+	} catch (error) {
+		console.error("Direct backend: " + error);
 		throw "direct backend failed";
 	}
 }
 
-async function getHTML(url: URL) {
+async function getHTML(tiktok_url: string) {
 	return new Promise<string>(async (resolve, reject) => {
 		try {
-			const response = await axios(url.toString(), {
+			const response = await axios(tiktok_url, {
 				method: 'get',
 				responseType: 'text',
 				'headers': {
-					"hostname": url.hostname,
+					"hostname": (new URL(tiktok_url)).hostname,
 					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:105.0) Gecko/20100101 Firefox/105.0',
 				}
 			});
-			resolve(response.data);
+			return resolve(response.data);
 		} catch (error) {
-			reject(error);
+			return reject(error);
 		}
 	});
 }
@@ -43,7 +44,6 @@ function extractVideoLink(html_text: string) {
 	for (let i = 0; i < unparsed_links.length; i += 1) {
 		// convert unicode codepoints like "\u07AF" to characters
 		const parsed_link = unparsed_links[i].replace(codepoint_pattern, codepointToCharacter)
-
 		// if link contains "btag=80000" it's video link
 		if (/&btag=80000/g.test(parsed_link)) return parsed_link;
 	}
