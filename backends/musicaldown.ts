@@ -20,7 +20,7 @@ async function getData(tiktok_url: string): Promise<string> {
     return new Promise<string>(async function (resolve, reject) {
 
         // Go to website to create needed tokens & cookies
-        const init_response = await axios.get("https://musicaldown.com/id", {
+        const init_response = await axios.get("https://musicaldown.com/en", {
             headers: {
                 Accept: "*/*",
                 Referer: "https://musicaldown.com",
@@ -53,7 +53,7 @@ async function getData(tiktok_url: string): Promise<string> {
             url: "https://musicaldown.com/download",
             headers: {
                 "Origin": "https://musicaldown.com",
-                "Referer": "https://musicaldown.com/id",
+                "Referer": "https://musicaldown.com/en",
                 "Cookie": sessiondata_text,
             },
             data: form_data
@@ -66,9 +66,12 @@ async function getData(tiktok_url: string): Promise<string> {
 // Extract link from results page
 // TODO: extraction is too unreliable, should be using button text insted of blindly extracted links
 function extractLink(html: string) {
-    const links_regex = html.match(/(?<=target="_blank"[\s|rel="noreferrer"]+href=")[^"]+/g);
+    const link_pattern = /https.+?(?=\?)/g
+    const links_regex = html.match(link_pattern);
     if (links_regex != undefined)
-        if (links_regex.length >= 4)
-            return links_regex[3].match(/^[^&]+/g)![0];
+        for (let i = 0; i < links_regex.length; i++) {
+            const element = links_regex[i];
+            if (/video/g.test(element)) return element;
+        }
     throw "failed to extract links from html";
 }
