@@ -7,10 +7,8 @@ const { spawnSync } = require("node:child_process");
 import { Client, GatewayIntentBits, Message } from "discord.js";
 // backends
 import * as musicaldown from "./backends/musicaldown";
-import backend_direct from "./backends/direct";
 let backends = new Array<{ (data: string): Promise<string> }>();
-backends.push(musicaldown.default);
-backends.push(backend_direct);
+backends.push(musicaldown.getVideoURL);
 
 // Driver code
 const bot = new Client({
@@ -20,6 +18,7 @@ const bot = new Client({
 type Settings = {
     token: string;
     enable_compression: boolean;
+    codec_to_use: string,
     embeded_mode: boolean;
     ffmpeg_path: string;
     ffprobe_path: string;
@@ -101,15 +100,6 @@ if (process.platform === "win32") {
     });
 }
 
-// Custom types
-type BotConfig = {
-    bot_token: string;
-    fast_mode: boolean;
-    use_ffmpeg_from_PATH: boolean;
-    use_fast_mode_instead_of_compression: boolean;
-};
-
-
 function extractTiktokURLs(message_content: string) {
     const pattern = /(https:\/\/|http:\/\/)(vm\.|www\.)tiktok\.com\/\S+/gim;
     const links = message_content.match(pattern);
@@ -153,7 +143,7 @@ async function extractTiktokData(tiktok_url: string, max_tries: number) {
     while (true) {
         tries++;
         try {
-            const video_url = await musicaldown.default(tiktok_url);
+            const video_url = await musicaldown.getVideoURL(tiktok_url);
             const video_size = await validateAndGetContentLength(video_url);
             return { url: video_url, size: video_size };
         } catch (error: any) {
@@ -249,6 +239,7 @@ function configurationWizard(): Settings {
     return {
         token: token,
         enable_compression: enable_compression,
+        codec_to_use: "h264",
         embeded_mode: embeded_mode,
         ffmpeg_path: ffmpeg_path,
         ffprobe_path: ffprobe_path,
@@ -300,7 +291,7 @@ async function processVideoRequst(video_data_promise: Promise<VideoData>, reply_
         const audio_bitrate = parseInt(media_info.streams[1].bit_rate);
         const video_bitrate = Math.floor((67_108_864 - duration * audio_bitrate - 16_777_216) / duration);
 
-        const ffmpeg = spawnSync(settings.ffmpeg_path, `-i original.mp4 -y -b:v ${video_bitrate.toString()} -vcodec libx264 -profile:v baseline compressed.mp4`.split(" "));
+        const ffmpeg = spawnSync(settings.ffmpeg_path, `-i original.mp4 -y -b:v ${video_bitrate.toString()} -vcodec ${settings.codec_to_use} compressed.mp4`.split(" "));
         if (ffmpeg.status != 0) throw new Error("Compression failed: ffmpeg error");
 
         const video_blob = readFileSync("compressed.mp4").buffer;
