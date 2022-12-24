@@ -1,5 +1,0 @@
- - Add guided init configuration
- - ~~Trim DIRECT backend links for better look in FastMode~~ Fix Direct backend
- - Refactor for cleaner code (it's a mess)
- - Add compile script?
- - Race condition if two videos getting compressed at same time (probably add lock queue)

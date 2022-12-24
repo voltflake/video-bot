@@ -1,4 +1,7 @@
-/node_modules
-/out
+node_modules
+out
 package-lock.json
-/.vscode
+.vscode
+.prettierrc
+cookies.txt
+settings.json
