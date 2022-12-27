@@ -1,8 +1,9 @@
 {
+  "type": "module",
   "name": "tiktok-to-discord",
   "version": "0.1.2",
   "description": "",
-  "main": "./out/index.js",
+  "main": "./out/main.js",
   "author": "",
   "license": "MIT",
   "dependencies": {
