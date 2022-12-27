@@ -19,11 +19,11 @@ bot.login(settings.token);
 bot.on("messageCreate", async (message) => {
     if (message.content == "") return;
     if (message.author.id == bot.user?.id) return;
-    const tiktok_links = extractTiktokURLs(message.content);
-    const instagram_links = extractInstagramURLs(message.content);
+    const tiktok_link_regex = /(https:\/\/|http:\/\/)(vm\.|www\.)tiktok\.com\/\S+/gim;
+    const tiktok_links = message.content.match(tiktok_link_regex);
+    const instagram_link_regex = /(?:https:\/\/|http:\/\/)(?:www\.|)instagram\.com\/(?:p|reel)\/[^\/]+/gim;
+    const instagram_links = message.content.match(instagram_link_regex);
     if (tiktok_links == undefined && instagram_links == undefined) return;
-
-    let start_time = Date.now();
 
     // Remove embeds from original message for cleaner look
     try {
@@ -37,7 +37,7 @@ bot.on("messageCreate", async (message) => {
         console.log(`Recieved ${tiktok_links.length} tiktok links!`);
         for (let i = 0; i < tiktok_links.length; i++) {
             const video_data_promise = extractTiktokData(tiktok_links[i], 5);
-            processVideoRequst(video_data_promise, message, start_time);
+            processVideoRequst(video_data_promise, message);
         }
     }
 
@@ -46,7 +46,7 @@ bot.on("messageCreate", async (message) => {
         console.log(`Recieved ${instagram_links.length} instagram links!`);
         for (let i = 0; i < instagram_links.length; i++) {
             const video_data_promise = extractInstagramData(instagram_links[i], 3);
-            processVideoRequst(video_data_promise, message, start_time);
+            processVideoRequst(video_data_promise, message);
         }
     }
 });
@@ -64,26 +64,8 @@ process.on("SIGINT", () => {
 
 // Hack to use graceful shutdown on windows hosts
 if (process.platform === "win32") {
-    const rl = createInterface({
-        input: process.stdin,
-        output: process.stdout
-    });
-
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
     rl.on("SIGINT", () => process.emit("SIGINT"));
-}
-
-function extractTiktokURLs(message_content: string) {
-    const pattern = /(https:\/\/|http:\/\/)(vm\.|www\.)tiktok\.com\/\S+/gim;
-    const links = message_content.match(pattern);
-    if (links == undefined) return null;
-    return links;
-}
-
-function extractInstagramURLs(message_content: string) {
-    const pattern = /(?:https:\/\/|http:\/\/)(?:www\.|)instagram\.com\/(?:p|reel)\/[^\/]+/gim;
-    const links = message_content.match(pattern);
-    if (links == undefined) return null;
-    return links;
 }
 
 async function extractInstagramData(instagram_url: string, max_tries: number) {
@@ -92,7 +74,7 @@ async function extractInstagramData(instagram_url: string, max_tries: number) {
     while (true) {
         tries++;
         try {
-            const gallety_dl = spawnSync(settings.gallery_dl_path, `--get-urls --cookies cookies.txt ${instagram_url}`.split(" "));
+            const gallety_dl = spawnSyncWrapper(`${settings.gallery_dl_path} --get-urls --cookies cookies.txt ${instagram_url}`);
             if (gallety_dl.status != 0) throw new Error("extracting raw video failed: gallery-dl error, check cookies");
             const links = new TextDecoder("utf-8").decode(gallety_dl.stdout).split("\n");
             if (links == undefined) throw new Error("gallery-dl couldn't find any links");
@@ -134,50 +116,6 @@ async function validateAndGetContentLength(url: string): Promise<number> {
     const content_length = response.headers.get("content-length");
     if (content_length == undefined) throw new Error("Unable to get content-length, header is missing");
     return parseInt(content_length);
-}
-
-class Status {
-    raw_text: string = "";
-    status_message!: Message;
-    #promiseReady;
-
-    constructor(msg: Message, count: number) {
-        this.#promiseReady = this.#init(msg, count);
-    }
-
-    async #init(msg: Message, count: number) {
-        this.raw_text = "";
-        for (let i = 0; i < count; i += 1) {
-            this.raw_text = this.raw_text + "Link " + (i + 1) + " - Scheduled...\n";
-        }
-        this.status_message = await msg.reply({
-            content: this.raw_text,
-            allowedMentions: { repliedUser: false }
-        });
-
-        return this;
-    }
-
-    async update(index: number, new_status: string) {
-        let lines = this.raw_text.split("\n");
-        lines[index] = lines[index].slice(0, lines[index].indexOf(" - ") + 3);
-        lines[index] = lines[index] + new_status;
-        this.raw_text = lines.join("\n");
-        await this.status_message.edit({
-            content: this.raw_text,
-            allowedMentions: { repliedUser: false }
-        });
-    }
-
-    // deletes status message if no errors occured
-    async destroy() {
-        if (/Error/.test(this.raw_text)) return;
-        await this.status_message.delete();
-    }
-
-    ready() {
-        return this.#promiseReady;
-    }
 }
 
 function guideAndCreateSettings() {
@@ -223,7 +161,7 @@ function guideAndCreateSettings() {
 }
 
 // TODO Add json validator
-function getSettings() {
+function getSettings(): Settings {
     if (!existsSync("./settings.json")) {
         guideAndCreateSettings();
     }
@@ -231,88 +169,72 @@ function getSettings() {
     return JSON.parse(data);
 }
 
-async function processVideoRequst(video_data_promise: Promise<VideoData>, reply_to: Message, start_time: number) {
+async function processVideoRequst(video_data_promise: Promise<VideoData>, reply_to: Message) {
     try {
+        let start_time = Date.now();
         const video_data = await video_data_promise;
-        console.log(`Video data extraction took ${start_time - Date.now()}ms`);
+        console.debug(`profiling: video extraction ${Date.now() - start_time}ms`);
 
-        if (settings.embeded_mode) {
-            reply_to.reply({ content: video_data.url, allowedMentions: { repliedUser: false } });
+        if (settings.embeded_mode || video_data.size >= 8_388_608 && !settings.enable_compression) {
+            await reply_to.reply({ content: video_data.url, allowedMentions: { repliedUser: false } });
             return;
         }
 
-        if (video_data.size <= 8_388_608) {
-            const response = await fetch(video_data.url);
-            const video_blob = await response.arrayBuffer();
-            reply_to.reply({ files: [{ attachment: Buffer.from(video_blob), name: "video.mp4" }], allowedMentions: { repliedUser: false } });
-            return;
-        }
-
-        if (!settings.enable_compression) {
-            reply_to.reply({ content: video_data.url, allowedMentions: { repliedUser: false } });
-            return;
-        }
-
-        // TODO allow parralel compression jobs
+        start_time = Date.now();
         const response = await fetch(video_data.url);
         const original_video = await response.arrayBuffer();
-        const arr = new Uint8Array(original_video);
         if (original_video == undefined) throw new Error("Error when downloading/reading video");
+        console.debug(`profiling: video download ${Date.now() - start_time}ms`);
+
+        if (video_data.size < 8_388_608) {
+            start_time = Date.now();
+            await reply_to.reply({
+                files: [{ attachment: Buffer.from(original_video), name: "video.mp4" }],
+                allowedMentions: { repliedUser: false }
+            });
+            console.debug(`profiling: upload to discord ${Date.now() - start_time}ms`);
+            return;
+        }
+
+        start_time = Date.now();
         writeFileSync("original.mp4", Buffer.from(original_video));
+        console.debug(`profiling: saved video to disk ${Date.now() - start_time}ms`);
 
-        const ffprobe = spawnSync(settings.ffprobe_path, "-v quiet -print_format json -show_streams original.mp4".split(" "));
+        start_time = Date.now();
+        const ffprobe = spawnSyncWrapper(`${settings.ffprobe_path} -v quiet -print_format json -show_streams original.mp4`);
         if (ffprobe.status != 0) throw new Error("Compression failed: ffprobe error");
-        const links = new TextDecoder("utf-8").decode(ffprobe.stdout).split("\n");
-        if (links == undefined) throw new Error("gallery-dl couldn't find any links");
+        console.debug(`profiling: ffprobe ${Date.now() - start_time}ms`);
 
-        const json_text = new TextDecoder("utf-8").decode(ffprobe.stdout);
-        const media_info = JSON.parse(json_text);
+        const ffprobe_json_text = new TextDecoder("utf-8").decode(ffprobe.stdout);
+        const media_info = JSON.parse(ffprobe_json_text);
         const duration = parseFloat(media_info.streams[0].duration);
         const audio_bitrate = parseInt(media_info.streams[1].bit_rate);
         const video_bitrate = Math.floor((67_108_864 - duration * audio_bitrate - 16_777_216) / duration);
 
-        const ffmpeg = spawnSync(settings.ffmpeg_path, `-i original.mp4 -y -b:v ${video_bitrate.toString()} -vcodec ${settings.codec_to_use} compressed.mp4`.split(" "));
+        start_time = Date.now();
+        const ffmpeg = spawnSyncWrapper(`${settings.ffmpeg_path} -i original.mp4 -y -b:v ${video_bitrate.toString()} -vcodec ${settings.codec_to_use} compressed.mp4`);
         if (ffmpeg.status != 0) throw new Error("Compression failed: ffmpeg error");
+        console.debug(`profiling: ffmpeg ${Date.now() - start_time}ms`);
 
+        start_time = Date.now();
         const video_blob = readFileSync("compressed.mp4").buffer;
+        console.debug(`profiling: read video from disk ${Date.now() - start_time}ms`);
         if (video_blob.byteLength > 8_388_608) throw new Error("Compression failed: compressed video is too big");
-        reply_to.reply({ files: [{ attachment: Buffer.from(video_blob), name: "video.mp4" }], allowedMentions: { repliedUser: false } });
+
+        start_time = Date.now();
+        await reply_to.reply({ files: [{ attachment: Buffer.from(video_blob), name: "video.mp4" }], allowedMentions: { repliedUser: false } });
+        console.debug(`profiling: upload to discord ${Date.now() - start_time}ms`);
 
         unlinkSync("original.mp4");
         unlinkSync("compressed.mp4");
-        return;
     } catch (error: any) {
-        let video_data: VideoData;
-        try {
-            video_data = await video_data_promise;
-        } catch (error: any) {
-            reply_to.reply({ content: `Error when getting video data: ${error.message}`, allowedMentions: { repliedUser: false } });
-        }
-        reply_to.reply({ content: `Error when processing video: ${video_data!.url}\n${error.message}`, allowedMentions: { repliedUser: false } });
+        reply_to.reply({ content: `Error when getting video data: ${error.message}`, allowedMentions: { repliedUser: false } });
     }
 }
 
-//  // upload video to discord
-//  if (video.byteLength <= 8_388_608) {
-//     await status.update(i, "Uploading video to Discord...");
-//     await msg.reply({ files: [{ attachment: video, name: "tiktok.mp4" }], allowedMentions: { repliedUser: false } });
-//     await status.update(i, "Done.");
-//     continue;
-// }
-
-// await status.update(i, "Compressing video...");
-// fs.writeFileSync("temp.mp4", video, { flag: "w+" });
-// const ffprobe_path: string = config.use_ffmpeg_from_PATH ? "ffprobe" : ffprobe_portable;
-// let info = await ffprobe('temp.mp4', { path: ffprobe_path });
-// const duration: number = info.streams[0].duration;
-// const audio_bitrate: number = info.streams[1].bit_rate;
-// const video_bitrate: number = Math.floor((67_108_864 - duration * audio_bitrate - 16_777_216) / duration);
-// const ffmpeg_path = config.use_ffmpeg_from_PATH ? "ffmpeg" : ffmpeg_portable;
-// execSync(ffmpeg_path + " -i temp.mp4 -y -b:v " + video_bitrate + " -vcodec libx264 -profile:v baseline out.mp4");
-// video = Buffer.from(fs.readFileSync("out.mp4").buffer);
-// await status.update(i, "Uploading video to Discord...");
-// await msg.reply({ files: [{ attachment: video, name: "tiktok.mp4" }], allowedMentions: { repliedUser: false } });
-// await status.update(i, "Done.");
-// fs.unlinkSync('./temp.mp4');
-// fs.unlinkSync('./out.mp4');
-// continue;
+function spawnSyncWrapper(command: string) {
+    const argument_tokens = command.split(" ");
+    const application = argument_tokens.shift();
+    if (application == undefined) throw new Error("Bad command passed to spawnSyncWrapper()");
+    return spawnSync(application, argument_tokens);
+}

@@ -1,11 +1,10 @@
 {
   "compilerOptions": {
     "module": "NodeNext",
-    "target": "ES2022",
+    "target": "ESNext",
     "outDir": "out",
     "sourceMap": true,
     "strict": true,
-    //"esModuleInterop": true,
     "moduleResolution": "NodeNext"
   }
 }

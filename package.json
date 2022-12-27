@@ -4,7 +4,7 @@
   "version": "0.1.2",
   "description": "",
   "main": "./out/main.js",
-  "author": "",
+  "author": "Danyil Diabin",
   "license": "MIT",
   "dependencies": {
     "discord.js": "^14.7.1"
