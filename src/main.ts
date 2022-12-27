@@ -8,8 +8,9 @@ import { createInterface } from "readline";
 
 const bot = new Client({
     intents: [
-        GatewayIntentBits.GuildMessages |
+        GatewayIntentBits.GuildMessageTyping |
         GatewayIntentBits.MessageContent |
+        GatewayIntentBits.GuildMessages |
         GatewayIntentBits.Guilds
     ]
 });
@@ -33,12 +34,20 @@ bot.on("messageCreate", async (message) => {
         console.warn("No permission to remove embeds, skipping...");
     }
 
+    await message.channel.sendTyping();
+    const typing_interval = setInterval(async ()=>{
+      await message.channel.sendTyping();
+    }, 9000);
+  
+    const videos_to_process = [];
+
     // Process any tiktok links
     if (tiktok_links != undefined) {
         console.log(`Recieved ${tiktok_links.length} tiktok links!`);
         for (let i = 0; i < tiktok_links.length; i++) {
             const video_data_promise = extractTiktokData(tiktok_links[i], 5);
-            processVideoRequst(video_data_promise, message);
+            const promise = processVideoRequst(video_data_promise, message);
+            videos_to_process.push(promise);
         }
     }
 
@@ -47,9 +56,12 @@ bot.on("messageCreate", async (message) => {
         console.log(`Recieved ${instagram_links.length} instagram links!`);
         for (let i = 0; i < instagram_links.length; i++) {
             const video_data_promise = extractInstagramData(instagram_links[i], 3);
-            processVideoRequst(video_data_promise, message);
+            const promise = processVideoRequst(video_data_promise, message);
+            videos_to_process.push(promise);
         }
     }
+    await Promise.allSettled(videos_to_process);
+    clearInterval(typing_interval);
 });
 
 bot.on("ready", () => console.log(`Logged in as ${bot.user?.tag}!`));
