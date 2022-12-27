@@ -1,4 +1,5 @@
-import { existsSync, writeFileSync, readFileSync, unlinkSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { writeFile, readFile, unlink } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { Client, GatewayIntentBits, Message } from "discord.js";
 import { VideoData, Settings } from "./types.js";
@@ -161,12 +162,13 @@ function guideAndCreateSettings() {
 }
 
 // TODO Add json validator
-function getSettings(): Settings {
+function getSettings() {
     if (!existsSync("./settings.json")) {
         guideAndCreateSettings();
     }
     const data = readFileSync("./settings.json", { encoding: "utf-8" });
-    return JSON.parse(data);
+    const settings: Settings = JSON.parse(data);
+    return settings;
 }
 
 async function processVideoRequst(video_data_promise: Promise<VideoData>, reply_to: Message) {
@@ -197,7 +199,7 @@ async function processVideoRequst(video_data_promise: Promise<VideoData>, reply_
         }
 
         start_time = Date.now();
-        writeFileSync("original.mp4", Buffer.from(original_video));
+        await writeFile("original.mp4", Buffer.from(original_video));
         console.debug(`profiling: saved video to disk ${Date.now() - start_time}ms`);
 
         start_time = Date.now();
@@ -217,7 +219,7 @@ async function processVideoRequst(video_data_promise: Promise<VideoData>, reply_
         console.debug(`profiling: ffmpeg ${Date.now() - start_time}ms`);
 
         start_time = Date.now();
-        const video_blob = readFileSync("compressed.mp4").buffer;
+        const video_blob = (await readFile("compressed.mp4")).buffer;
         console.debug(`profiling: read video from disk ${Date.now() - start_time}ms`);
         if (video_blob.byteLength > 8_388_608) throw new Error("Compression failed: compressed video is too big");
 
@@ -225,10 +227,10 @@ async function processVideoRequst(video_data_promise: Promise<VideoData>, reply_
         await reply_to.reply({ files: [{ attachment: Buffer.from(video_blob), name: "video.mp4" }], allowedMentions: { repliedUser: false } });
         console.debug(`profiling: upload to discord ${Date.now() - start_time}ms`);
 
-        unlinkSync("original.mp4");
-        unlinkSync("compressed.mp4");
+        await unlink("original.mp4");
+        await unlink("compressed.mp4");
     } catch (error: any) {
-        reply_to.reply({ content: `Error when getting video data: ${error.message}`, allowedMentions: { repliedUser: false } });
+        await reply_to.reply({ content: `Error when getting video data: ${error.message}`, allowedMentions: { repliedUser: false } });
     }
 }
 
