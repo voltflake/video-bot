@@ -1,4 +1,4 @@
-# Discord bot which replies with video to TikTok or instagram link
+# Discord bot which replies with video to TikTok or Instagram link
 ### Current status: ✅ Works out of the box
 ![Bot in action](preview.gif)
 ### Features✨
@@ -16,8 +16,8 @@
 2. Build bot with these commands
 ```
 cd ~
-git clone https://github.com/danyildiabin/tiktok-to-discord
-cd tiktok-to-discord
+git clone https://github.com/voltflake/video-bot
+cd video-bot
 npm install
 npx tsc
 ```
