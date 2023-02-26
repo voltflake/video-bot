@@ -4,9 +4,9 @@ import { spawnSync } from "node:child_process";
 import { Client, GatewayIntentBits, Message } from "discord.js";
 import { VideoData, Settings } from "./types.js";
 import { getVideoURL } from "./backends/musicaldown.js";
-import * as readline from 'node:readline/promises';
+import { createInterface } from 'node:readline/promises';
 
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+const rl = createInterface({ input: process.stdin, output: process.stdout });
 
 const bot = new Client({
     intents: [
@@ -27,7 +27,7 @@ getSettings().then((config: Settings)=>{
 bot.on("messageCreate", async (message) => {
     if (message.content == "") return;
     if (message.author.id == bot.user?.id) return;
-    const tiktok_link_regex = /(https:\/\/|http:\/\/)(vm\.|www\.)tiktok\.com\/\S+/gim;
+    const tiktok_link_regex = /(https:\/\/|http:\/\/)(vt\.|vm\.|www\.)tiktok\.com\/\S+/gim;
     const tiktok_links = message.content.match(tiktok_link_regex);
     const instagram_link_regex = /(?:https:\/\/|http:\/\/)(?:www\.|)instagram\.com\/(?:p|reel)\/[^\/]+/gim;
     const instagram_links = message.content.match(instagram_link_regex);
