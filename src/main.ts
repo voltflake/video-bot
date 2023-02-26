@@ -27,7 +27,7 @@ getSettings().then((config: Settings)=>{
 bot.on("messageCreate", async (message) => {
     if (message.content == "") return;
     if (message.author.id == bot.user?.id) return;
-    const tiktok_link_regex = /(https:\/\/|http:\/\/)(vt\.|vm\.|www\.)tiktok\.com\/\S+/gim;
+    const tiktok_link_regex = /(https:\/\/|http:\/\/)([^\.]*.|)tiktok\.com\/\S+/gim;
     const tiktok_links = message.content.match(tiktok_link_regex);
     const instagram_link_regex = /(?:https:\/\/|http:\/\/)(?:www\.|)instagram\.com\/(?:p|reel)\/[^\/]+/gim;
     const instagram_links = message.content.match(instagram_link_regex);
