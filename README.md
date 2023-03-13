@@ -6,12 +6,12 @@
 - [X] Sends videos as reply to original message
 - [X] Supports multiple links in one message
 - [X] No TikTok watermark on videos
-- [X] Can be hosted on Raspberry Pi  
-- [X] Configuration wizzard is built into bot  
-- [X] Also supports instagram links with some additional setup  
+- [X] Can be hosted on Raspberry Pi
+- [X] Configuration wizzard is built into bot
+- [X] Also supports instagram links with some additional setup
 
 ### ⚠️🤝 If you encountered a problem or want some help feel free to sumbit an issue. Feedback is appriciated!
-## Installation 
+## Installation
 1. Make sure recent version of node.js and npm is installed on your system
 2. Build bot with these commands
 ```
@@ -25,7 +25,7 @@ npx tsc
 ```
 node .
 ```
-## settings.json file explanation  
+## settings.json file explanation
 - `token` - Discord bot token to use.
 - `embeded_mode` - always send videos using URL message in Discord, may have not cleanest look but works realy fast if you have slow internet.
 - `gallery_dl_path` - path to gallery-dl executable if it's not present in your PATH enviroment variable.
