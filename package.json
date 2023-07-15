@@ -9,9 +9,6 @@
   "dependencies": {
     "discord.js": "^14.7.1"
   },
-  "overrides": {
-    "discord-api-types": "0.37.20"
-  },
   "devDependencies": {
     "@types/node": "^18.8.2",
     "typescript": "^4.8.4"

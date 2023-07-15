@@ -5,3 +5,4 @@ package-lock.json
 .prettierrc
 cookies.txt
 settings.json
+ffmpeg-log.txt
