@@ -72,7 +72,7 @@ async function getHTML(tiktok_url: string): Promise<string> {
 // Extract link from results page
 // TODO: extraction is too unreliable, should be using button text insted of blindly extracted links
 function extractDefaultVideoURL(html: string) {
-    const link_pattern = /https:\/\/.{0,5}tiktokcdn.+?a=1233/g;
+    const link_pattern = /https:\/\/[^"]+\/video\/[^&]+/g;
     const links_regex = html.match(link_pattern);
     if (links_regex != undefined) {
         for (let i = 0; i < links_regex.length; i++) {
