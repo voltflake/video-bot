@@ -1,6 +1,13 @@
-## **Discord bot which replies with video to (YouTube & Instagram & TikTok) links**  
-### ✅ Should work out of the box  
-### ⚠️🤝 If you encountered a problem or want some help feel free to sumbit an issue. Feedback is appriciated!  
+# Open-Source Discord Bot that replies to links with content 
+![Bot in action](preview.gif)  
+### Currently works fine with Instagram✅ / TikTok✅ / Youtube✅  
+🤝 If you encountered a problem or want some help feel free to sumbit an issue. Feedback is appriciated!  
+### 2023 September Update
+- [X] Added support for instagram posts with multiple items
+- [X] YouTube videos are now beeing sent to channel by default but only if they fit into 25MB Discord limit
+- [X] Improved processing speed when requesting multiple links in one message
+- [X] Improved logging when compressing videos
+- [X] Improved error reporting in channel
 ### Features✨
 - [X] Lets everyone view the video directly in Discord
 - [X] Sends videos as reply to original message
@@ -9,9 +16,12 @@
 - [X] Can be hosted on Raspberry Pi (read Raspberry Pi section)
 - [X] Settings wizzard is built into bot
 - [X] Also supports Instagram and YouTube links with some additional setup
-
-![Bot in action](preview.gif)  
-
+### Known issues⚠️
+- [X] Photo tiktoks may be stretched too much if different image sizes used
+- [X] When sending too many atttachments to discord at the same time, some replies may repeat (Discord.JS issue?)
+- [X] Videos which are saved onto disk to be compressed later and compression results are not automatically deleted from `/logs` for debugging and statistic purposes. Uncomment two lines with `unlink()` function in `video_compression.ts` to delete them automatically when they're no longer needed
+- [X] (Unverified) When processing multiple instagram links at the same time instagram.com may reject some requests
+- [X] Bot threats Private/Unavailable content as backend errors. (post from private Instagram profile or removed youtube video for example)
 # Installation
 1. Make sure recent version of node.js and npm is installed on your system
 2. Build bot with these commands
@@ -118,4 +128,4 @@ chmod +x /home/pi/video-bot/start.sh
 - `token` - Discord bot token to use.
 - `embeded_mode` - always send videos using URL message in Discord, may have not cleanest look but works realy fast if you have slow internet.
 - `enable_compression` - setting which enables compression for videos bigger than 8MB so they can be sent as single video file to discord, without links. If compression is disabled videos will be sent as embeded link and can expire after a week or so.
-- `codec_to_use` - specifies which codec ffmpeg will use during compression. You can specify this as "omx_h264" on raspberry pi to use hardware accelerated encoding. By default uses "h264".
+- `codec` - specifies which video codec ffmpeg will use during compression. You can specify this as "omx_h264" on raspberry pi to use hardware accelerated encoding. By default uses "h264".
