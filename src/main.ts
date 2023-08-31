@@ -63,7 +63,7 @@ async function handleMessage(msg: Message) {
         }
     }
 
-    const instagram_links = msg.content.match(/(?:https:\/\/|http:\/\/)(?:www\.|)instagram\.com\/(?:p|reel)\/[^\/]+/gm);
+    const instagram_links = msg.content.match(/(?:https:\/\/|http:\/\/)(?:www\.|)instagram\.com\/\S+/gm);
     if (instagram_links !== null) {
         for (const link of instagram_links) {
             backend_contexts.push({
