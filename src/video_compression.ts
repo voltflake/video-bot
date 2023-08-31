@@ -20,8 +20,8 @@ export async function compressVideo(data: ArrayBuffer) {
     // 4% reserved for muxing overhead
     const available_bits_per_second = (25 * 1024 * 1024 * 8 * 0.96) / original_info.duration_in_seconds;
 
-    // 0.80 is additional space if some video gets over +20% bitrate it was given
-    const required_video_bitrate = Math.floor((available_bits_per_second - original_info.audio_bitrate) * 0.80);
+    // 0.80 is additional space if some video gets over +10% bitrate it was given
+    const required_video_bitrate = Math.floor((available_bits_per_second - original_info.audio_bitrate) * 0.90);
 
     const ffmpeg_cmd = `ffmpeg -i ${filename} -y -c:a copy -b:v ${required_video_bitrate.toString()} -c:v ${codec} ${filename_compressed}`;
     await easySpawn(ffmpeg_cmd);
