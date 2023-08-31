@@ -1,10 +1,15 @@
 {
   "compilerOptions": {
-    "module": "NodeNext",
-    "target": "ESNext",
-    "outDir": "out",
+    "target": "es2022",
+    "lib": ["es2022"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "sourceMap": true,
+    "outDir": "out",
+    "forceConsistentCasingInFileNames": true,
     "strict": true,
-    "moduleResolution": "NodeNext"
-  }
+    "skipLibCheck": true,
+    "incremental": true
+  },
+  "include": ["src/**/*"]
 }
