@@ -4,7 +4,7 @@
 🤝 If you encountered a problem or want some help feel free to sumbit an issue. Feedback is appriciated!  
 ### 2023 September Update
 - [X] Added support for instagram posts with multiple items
-- [X] Default youtube videos are now beeing sent to channel if they fit into 25MB Discord limit
+- [X] YouTube videos are now beeing sent to channel by default but only if they fit into 25MB Discord limit
 - [X] Improved processing speed when requesting multiple links in one message
 - [X] Improved logging when compressing videos
 - [X] Improved error reporting in channel
@@ -19,8 +19,8 @@
 ### Known issues⚠️
 - [X] Photo tiktoks may be stretched too much if different image sizes used
 - [X] When sending too many atttachments to discord at the same time, some replies may repeat (Discord.JS issue?)
-- [X] Videos wchich are saved onto disk to be compressed and compression results are not automatically deleted from `/logs` for debugging and statistic purposes, uncomment two lines with `unlink()` function in `video_compression.ts` to delete them automatically when they're no longer needed
-- [X] (Unverified) When processing multiple instagram links at same time instagram.com may reject some requests
+- [X] Videos which are saved onto disk to be compressed later and compression results are not automatically deleted from `/logs` for debugging and statistic purposes. Uncomment two lines with `unlink()` function in `video_compression.ts` to delete them automatically when they're no longer needed
+- [X] (Unverified) When processing multiple instagram links at the same time instagram.com may reject some requests
 - [X] Bot threats Private/Unavailable content as backend errors. (post from private Instagram profile or removed youtube video for example)
 # Installation
 1. Make sure recent version of node.js and npm is installed on your system
