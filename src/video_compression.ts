@@ -26,7 +26,7 @@ export async function compressVideo(data: ArrayBuffer) {
     const ffmpeg_cmd = `ffmpeg -i ${filename} -y -c:a copy -b:v ${required_video_bitrate.toString()} -c:v ${codec} ${filename_compressed}`;
     await easySpawn(ffmpeg_cmd);
 
-    const compressed_video = (await readFile(filename_compressed)).buffer;
+    const compressed_video = await readFile(filename_compressed);
     const compressed_info = await ffprobe(filename_compressed);
 
     // uncomment this to delete intermidiate files files

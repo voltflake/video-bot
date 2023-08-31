@@ -257,7 +257,7 @@ async function completeOrFailJob(context: BackendContext) {
             try {
                 const compressed = await compressVideo(original_video);
                 if (compressed.byteLength <= 25 * 1024 * 1024) {
-                    message_content.attachments.push({ attachment: Buffer.from(original_video), name: `compressed_video${i + 1}.mp4` })
+                    message_content.attachments.push({ attachment: Buffer.from(compressed), name: `compressed_video${i + 1}.mp4` })
                     continue;
                 }
             } catch (error) {
