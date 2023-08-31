@@ -8,7 +8,7 @@ export type url_and_size = {
 export type Settings = {
     token: string;
     enable_compression: boolean;
-    codec_to_use: string;
+    codec: string;
     embeded_mode: boolean;
 };
 
