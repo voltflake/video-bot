@@ -112,11 +112,13 @@ async function handleMessage(msg: Message) {
         msg.channel.sendTyping();
     }, 5000)
 
-    try {
-        await msg.suppressEmbeds(true);   
-    } catch (error) {
-        console.log(`Bot has no rights to edit messages in server named "${msg.guild?.name}"`);
-    }
+    setTimeout(() => {
+        try {
+            msg.suppressEmbeds(true);   
+        } catch (error) {
+            console.log(`Bot has no rights to edit messages in server named "${msg.guild?.name}"`);
+        }
+    }, 4000);
 
     const running_jobs = [];
     for (const context of backend_contexts) {
