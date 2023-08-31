@@ -1,7 +1,7 @@
 # Open-Source Discord Bot that replies to links with content 
-<img src="https://github.com/voltflake/video-bot/assets/51025847/58af9ec4-6f29-4568-9aab-cf6d414da999" width="33%"/>  
-<img src="https://github.com/voltflake/video-bot/assets/51025847/c34980ee-a069-48fc-97de-78530b311d4e" width="33%"/>  
-<img src="https://github.com/voltflake/video-bot/assets/51025847/22298993-7fb8-4113-8581-784fad4329c9" width="33%"/>  
+<img src="https://github.com/voltflake/video-bot/assets/51025847/58af9ec4-6f29-4568-9aab-cf6d414da999" width="32%"/>  
+<img src="https://github.com/voltflake/video-bot/assets/51025847/c34980ee-a069-48fc-97de-78530b311d4e" width="32%"/>  
+<img src="https://github.com/voltflake/video-bot/assets/51025847/22298993-7fb8-4113-8581-784fad4329c9" width="32%"/>  
 
 ### Currently works fine with Instagram✅ / TikTok✅ / Youtube✅  
 🤝 If you encountered a problem or want some help feel free to sumbit an issue. Feedback is appriciated!  
