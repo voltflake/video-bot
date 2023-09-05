@@ -49,7 +49,7 @@ async function handleMessage(msg: Message) {
     if (msg.author.id == bot.user?.id) return;
     let backend_contexts: Array<BackendContext> = [];
 
-    const tiktok_links = msg.content.match(/(https:\/\/|http:\/\/)([^\.]*.|)tiktok\.com\/\S+/gm);
+    const tiktok_links = msg.content.match(/(https:\/\/|http:\/\/)([^\.]*\.*)tiktok\.com\/\S+/gm);
     if (tiktok_links !== null) {
         for (const link of tiktok_links) {
             backend_contexts.push({
@@ -63,7 +63,7 @@ async function handleMessage(msg: Message) {
         }
     }
 
-    const instagram_links = msg.content.match(/(?:https:\/\/|http:\/\/)(?:www\.|)instagram\.com\/\S+/gm);
+    const instagram_links = msg.content.match(/(?:https:\/\/|http:\/\/)([^\.]*\.*)instagram\.com\/\S+/gm);
     if (instagram_links !== null) {
         for (const link of instagram_links) {
             backend_contexts.push({
@@ -77,7 +77,7 @@ async function handleMessage(msg: Message) {
         }
     }
 
-    const shorts_links = msg.content.match(/(https:\/\/|http:\/\/)([^\.]*|).(youtube\.com)\/shorts\S+/gm);
+    const shorts_links = msg.content.match(/(https:\/\/|http:\/\/)([^\.]*\.*)(youtube\.com)\/shorts\S+/gm);
     if (shorts_links !== null) {
         for (const link of shorts_links) {
             backend_contexts.push({
@@ -91,7 +91,7 @@ async function handleMessage(msg: Message) {
         }
     }
 
-    const youtube_links = msg.content.match(/(https:\/\/|http:\/\/)([^\.]*.|)youtube\.com\/watch\S+/gm);
+    const youtube_links = msg.content.match(/(https:\/\/|http:\/\/)([^\.]*\.*)youtube\.com\/watch\S+/gm);
     if (youtube_links !== null) {
         for (const link of youtube_links) {
             backend_contexts.push({
