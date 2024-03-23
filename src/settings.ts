@@ -12,6 +12,7 @@ export async function getSettings(rl: Interface) {
         const settings = await startConfigWizard(rl);
         const string_data = JSON.stringify(settings);
         await writeFile("./settings.json", string_data);
+        displayLogo();
         console.log("Created settings file.");
         return settings;
     }
