@@ -1,24 +1,27 @@
-// supports default videos only
+// Supports default videos only
 
-import { validateAndGetContentLength } from "../helper_functions.js";
-import { Job } from "../types.js";
-import { processSingleVideo } from "../common.js";
+import type { Job } from "../types.js";
+import { processSingleVideo } from "../handle_single_video.js";
 
 export default async function scraperapi(job: Job) {
-
-    const api_url = "https://tiktok-scraper7.p.rapidapi.com/?" + new URLSearchParams({ url: job.href, hd: "1" }).toString();
+    const url_params = {
+        url: job.href,
+        hd: "1"
+    };
+    const url_params_str = new URLSearchParams(url_params).toString();
+    const apiUrl = `https://tiktok-scraper7.p.rapidapi.com/?${url_params_str}`;
     const options = {
-        method: 'GET',
+        method: "GET",
         headers: {
-            'X-RapidAPI-Key': '483548264amsh763f4afc0f7f6a0p11fa4djsn66827132bf45',
-            'X-RapidAPI-Host': 'tiktok-scraper7.p.rapidapi.com'
+            "X-RapidAPI-Key": job.rapidapi_key,
+            "X-RapidAPI-Host": "tiktok-scraper7.p.rapidapi.com"
         }
     };
 
-    const response = await fetch(api_url, options);
+    const response = await fetch(apiUrl, options);
     const result = await response.text();
-    const json = JSON.parse(result)
-    const url = json.data.play
+    const json = JSON.parse(result);
+    const url = json.data.play;
     const size = json.data.size;
-    await processSingleVideo(url, size, job)
+    await processSingleVideo(url, size, job);
 }

@@ -1,19 +1,19 @@
 import { createInterface } from "node:readline/promises";
-import { Client, GatewayIntentBits, Message } from "discord.js";
+import { Client, GatewayIntentBits, type Message } from "discord.js";
 
-import { Settings, Job } from "./types.js";
-import { getSettings } from "./settings.js";
-import ytdlp from "./modules/youtube-ytdlp.js";
 import rocketapi from "./modules/instagram-rocketapi.js";
 import scraperapi from "./modules/tiktok-scraperapi.js";
+import ytdlp from "./modules/youtube-ytdlp.js";
+import { getSettings } from "./settings.js";
+import type { Job, Settings } from "./types.js";
 
 const rl = createInterface({ input: process.stdin, output: process.stdout });
 const bot = new Client({
     intents: [
         GatewayIntentBits.GuildMessageTyping |
-        GatewayIntentBits.MessageContent |
-        GatewayIntentBits.GuildMessages |
-        GatewayIntentBits.Guilds
+            GatewayIntentBits.MessageContent |
+            GatewayIntentBits.GuildMessages |
+            GatewayIntentBits.Guilds
     ]
 });
 
@@ -32,7 +32,7 @@ process.on("SIGINT", () => {
 process.on("unhandledRejection", (error) => console.log("Unhandled promise rejection: ", error));
 
 bot.on("ready", () => {
-    console.log(`Logged in as ${bot.user?.tag}!`);
+    console.info(`Logged in as ${bot.user?.tag}!`);
 });
 
 bot.on("messageCreate", handleMessage);
@@ -44,19 +44,19 @@ getSettings(rl).then((config: Settings) => {
 });
 
 async function handleMessage(msg: Message) {
-    if (msg.content == "") return;
-    if (msg.author.id == bot.user?.id) return;
-    let jobs = searchJobs(msg);
-    if (jobs.length == 0) return;
+    if (msg.content === "") return;
+    if (msg.author.id === bot.user?.id) return;
+    const jobs = searchJobs(msg);
+    if (jobs.length === 0) return;
 
     msg.suppressEmbeds(true).catch(() => {
-        console.log(`Bot has no rights to edit messages in server named "${msg.guild?.name}"`);
-    })
+        console.warn(`Bot has no rights to edit messages in server named "${msg.guild?.name}"`);
+    });
 
     msg.channel.sendTyping();
     const typingInterval = setInterval(() => {
         msg.channel.sendTyping();
-    }, 5000)
+    }, 5000);
 
     const running_jobs = [];
     for (const job of jobs) {
@@ -70,60 +70,65 @@ async function handleMessage(msg: Message) {
 async function completeOrFailJob(job: Job) {
     // TODO add redundant (backup) modules in case first one fails
     switch (job.type) {
-        case "YouTube":
+        case "YouTube": {
             await ytdlp(job);
             break;
-
-        case "Instagram":
+        }
+        case "Instagram": {
             await rocketapi(job);
             break;
-
-        case "TikTok":
+        }
+        case "TikTok": {
             await scraperapi(job);
             break;
-
-        default:
-            break;
+        }
     }
 }
 
 function searchJobs(message: Message) {
-    let jobs = new Array<Job>;
+    const jobs = new Array<Job>();
 
     const hrefs = message.content.match(/(?:https:\/\/|http:\/\/)\S+/gm);
-    if (hrefs == null) return []
-    let urls = new Array<URL>;
-    for (let i = 0; i < hrefs.length; i++) {
-        urls.push(new URL(hrefs[i]))
+    if (hrefs == null) {
+        return [];
+    }
+    const urls = new Array<URL>();
+    for (const element of hrefs) {
+        urls.push(new URL(element));
     }
 
     for (const url of urls) {
-        if (!url.hostname.endsWith("tiktok.com")) continue;
+        if (!url.hostname.endsWith("tiktok.com")) {
+            continue;
+        }
         jobs.push({
-            mode: "Compromise",
+            mode: settings.mode,
             type: "TikTok",
             discord_message: message,
-            href: url.href
+            href: url.href,
+            rapidapi_key: settings.rapidapi_key
         });
     }
 
     for (const url of urls) {
         if (!url.hostname.endsWith("instagram.com")) continue;
         jobs.push({
-            mode: "Compromise",
+            mode: settings.mode,
             type: "Instagram",
             discord_message: message,
-            href: url.href
+            href: url.href,
+            rapidapi_key: settings.rapidapi_key
         });
     }
 
     for (const url of urls) {
         if (!url.hostname.endsWith("youtube.com") && !url.hostname.endsWith("youtu.be")) continue;
         jobs.push({
-            mode: "Compromise",
+            mode: settings.mode,
             type: "YouTube",
             discord_message: message,
-            href: url.href
+            href: url.href,
+            rapidapi_key: settings.rapidapi_key
         });
     }
 

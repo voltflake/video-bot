@@ -1,12 +1,12 @@
-import { Interface } from "node:readline/promises";
-import { writeFile, readFile } from "node:fs/promises";
-import { Settings } from "./types.js";
+import { readFile, writeFile } from "node:fs/promises";
+import type { Interface } from "node:readline/promises";
+import { type Settings, Mode } from "./types.js";
 
 export async function getSettings(rl: Interface) {
     try {
         const data = await readFile("./settings.json", { encoding: "utf-8" });
         const settings: Settings = JSON.parse(data);
-        // TODO: make sure settings file is good
+        // TODO: check if existing settings file is valid
         return settings;
     } catch {
         const settings = await startConfigWizard(rl);
@@ -17,25 +17,54 @@ export async function getSettings(rl: Interface) {
     }
 }
 
-async function queryInput(rl: Interface, query: string) {
-    const header = ` _____  _  _    ___       _    _
-|_   _|(_)| |__| _ ) ___ | |_ (_)__ __
-  | |  | || / /| _ \\/ _ \\|  _|| |\\ \\ /
-  |_|  |_||_\\_\\|___/\\___/ \\__||_|/_\\_\\\n`;
+function displayLogo() {
     console.clear();
-    console.log(header);
-    const result = await rl.question(query);
-    return result.trim();
+    console.info(String.raw` _____  _  _    ___       _    _       `);
+    console.info(String.raw`|_   _|(_)| |__| _ ) ___ | |_ (_)__ __ `);
+    console.info(String.raw`  | |  | || / /| _ \/ _ \|  _|| |\ \ / `);
+    console.info(String.raw`  |_|  |_||_\_\|___/\___/ \__||_|/_\_\ `);
 }
 
 async function startConfigWizard(rl: Interface) {
-    let settings: Settings = {
+    const settings: Settings = {
         token: "",
         codec: "h264",
+        rapidapi_key: "",
+        mode: Mode.compromise
     };
-    await queryInput(rl, "settings.json is missing... Starting configuration wizard.\n[Press Enter to continue]");
-    settings.token = await queryInput(rl, "Please paste your Discord bot token: ");
-    settings.codec = (await queryInput(rl, "Specify codec you want to use when compressing video\nfor example \"omx_h264\" if you plan to use this bot on raspberrypi etc...\n(Or press Enter to use h264 software encoder. Warning: may be slow!): ")) || "h264";
-    await queryInput(rl, "Note: ffmpeg must be installed to enable compression.\n(Press Enter to continue)");
+
+    console.info("settings.json is missing... Starting configuration wizard.");
+    await rl.question("[Press Enter to continue]");
+
+    displayLogo();
+    console.info("settings.json is missing... Starting configuration wizard.");
+    settings.token = (await rl.question("Please paste your Discord bot token: ")).trim();
+
+    displayLogo();
+    console.info("Specify codec you want to use when compressing video.");
+    console.info("Leave field blank to use H264 software encoder. Warning: may be slow!");
+    console.info("Warning: ffmpeg must be installed to enable compression of bigger videos.");
+    console.info('Note: If you\'re using this bot on Raspberry Pi 3 (Raspbian buster) choose "omx_h264"');
+    settings.codec = (await rl.question("Enter codec name or skip [Enter]: ")).trim() || "h264";
+
+    displayLogo();
+    console.info("Enter your RapidAPI key. Required to make TikTok and Instagram links work.");
+    console.info("Bot uses modules that depend on theese APIs:");
+    console.info("https://rapidapi.com/rocketapi/api/rocketapi-for-instagram");
+    console.info("https://rapidapi.com/tikwm-tikwm-default/api/tiktok-scraper7");
+    settings.rapidapi_key = (await rl.question("Your Key: ")).trim();
+
+    displayLogo();
+    console.info("Which Mode whould you like to use?");
+    console.info("1. Low-Traffic Mode");
+    console.info("2. Compromise Mode (Default)");
+    console.info("3. Beautiful Mode");
+    console.info("Visit GitHub page for more info about modes.");
+    console.info("https://github.com/voltflake/video-bot");
+    const mode = Number.parseInt((await rl.question("Mode number: ")).trim());
+    if (mode === 1) settings.mode = Mode.low_traffic;
+    if (mode === 2) settings.mode = Mode.compromise;
+    if (mode === 3) settings.mode = Mode.beautiful;
+
     return settings;
 }

@@ -8,9 +8,9 @@
     "url": "https://github.com/voltflake/video-bot"
   },
   "dependencies": {
-    "@types/node": "^20.11.30",
+    "typescript": "^5.4.3",
     "discord.js": "^14.14.1",
-    "typescript": "^5.4.3"
+    "@types/node": "^20.11.30"
   },
   "scripts": {
     "build": "tsc"
