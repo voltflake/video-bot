@@ -1,19 +1,40 @@
-import { writeFile, readFile, unlink, mkdir, access} from "node:fs/promises";
-import { easySpawn } from "./helper_functions.js";
+import { writeFile, readFile, unlink, mkdir, access, constants  } from "node:fs/promises";
+import { easySpawn } from "./common.js";
 
 // rpi can't hv-encode videos with bitrate less than 150kb/s
 // change codec to "h264_omx" in settings.json if you want to use Raspberry Pi hardware encoding
 export async function compressVideo(data: ArrayBuffer) {
     const { codec } = JSON.parse((await readFile("./settings.json")).toString());
+    
     try {
         await access("./logs");
-    } catch (error) {
+    } catch {
         await mkdir("./logs");
     }
+
+    try {
+        await access("./videos");
+    } catch {
+        await mkdir("./videos");
+    }
+
+    // locking mechanism to allow only one compression job at a time
+    const filename_lock = "./videos/compressing.lock";
+    while (true) {
+        try {
+            await access(filename_lock, constants.F_OK);
+            sleep(100)
+        } catch {
+            break;
+        }
+    }
+    await writeFile(filename_lock, "");
+
     const timestamp = Date.now();
-    const filename = `./logs/${timestamp}.mp4`;
-    const filename_compressed = `./logs/${timestamp}_compressed.mp4`;
+    const filename = `./videos/${timestamp}.mp4`;
+    const filename_compressed = `./videos/${timestamp}_compressed.mp4`;
     const filename_log = `./logs/${timestamp}.txt`;
+
     await writeFile(filename, new Uint8Array(data));
     const original_info = await ffprobe(filename);
 
@@ -29,12 +50,12 @@ export async function compressVideo(data: ArrayBuffer) {
     const compressed_video = await readFile(filename_compressed);
     const compressed_info = await ffprobe(filename_compressed);
 
-    // uncomment this to delete intermidiate files files
+    // uncomment this to remove temporary files after compression
     // await unlink(filename);
     // await unlink(filename_compressed);
 
     // some telemetry to help pick better compression settings for each codec in future
-    const cbr_bitrate_error_percentage = compressed_info.video_bitrate/(required_video_bitrate*0.01) - 100;
+    const cbr_bitrate_error_percentage = compressed_info.video_bitrate / (required_video_bitrate * 0.01) - 100;
     const log_entry = `ffmpeg cmd: ${ffmpeg_cmd}\n` +
         `video duration: ${original_info.duration_in_seconds.toFixed(2)}s\n` +
         `original file size: ${(data.byteLength / (1024 * 1024)).toFixed(2)}MB\n` +
@@ -51,6 +72,7 @@ export async function compressVideo(data: ArrayBuffer) {
         `${Math.abs(cbr_bitrate_error_percentage).toFixed(3)}%\n\n`;
 
     await writeFile(filename_log, log_entry);
+    await unlink(filename_lock);
     return compressed_video;
 }
 
@@ -65,4 +87,10 @@ async function ffprobe(filename: string) {
         video_bitrate: video_bitrate,
         audio_bitrate: audio_bitrate
     }
+}
+
+function sleep(ms: number) {
+    return new Promise((resolve) => {
+        setTimeout(resolve, ms);
+    });
 }

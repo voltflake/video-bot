@@ -28,28 +28,14 @@ async function queryInput(rl: Interface, query: string) {
     return result.trim();
 }
 
-async function confirmSetting(rl: Interface, query: string) {
-    while (true) {
-        const response = await queryInput(rl, query + "\nWrite 'Y' to enable, or 'N' to disable: ")
-        if (response == "Y") return true;
-        if (response == "N") return false;
-    }
-}
-
 async function startConfigWizard(rl: Interface) {
     let settings: Settings = {
         token: "",
-        embeded_mode: false,
-        enable_compression: false,
         codec: "h264",
     };
     await queryInput(rl, "settings.json is missing... Starting configuration wizard.\n[Press Enter to continue]");
     settings.token = await queryInput(rl, "Please paste your Discord bot token: ");
-    settings.embeded_mode = await confirmSetting(rl, "Send all videos as embeded links? (50MB Max)\nThose links may look ugly in chat.\nDo not use this unless your internet is super-slow");
-    settings.enable_compression = await confirmSetting(rl, "Enable compression for videos bigger than 25MB?\nYou must have ffmpeg and ffprobe in your installed.\nWithout compression videos up to 50MB will be sent as embbeded link");
-    settings.codec = "h264";
-    if (settings.enable_compression) {
-        settings.codec = (await queryInput(rl, "Specify codec you want to use when compressing video\nfor example \"omx_h264\" if you're on raspberrypi \n(Or press Enter to use h264 software encoder. Warning: may be slow!): ")) || "h264";
-    }
+    settings.codec = (await queryInput(rl, "Specify codec you want to use when compressing video\nfor example \"omx_h264\" if you plan to use this bot on raspberrypi etc...\n(Or press Enter to use h264 software encoder. Warning: may be slow!): ")) || "h264";
+    await queryInput(rl, "Note: ffmpeg must be installed to enable compression.\n(Press Enter to continue)");
     return settings;
 }
