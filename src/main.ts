@@ -28,9 +28,6 @@ process.on("SIGINT", () => {
     process.exit(0);
 });
 
-// Do not crash on unhandled errors
-process.on("unhandledRejection", (error) => console.log("Unhandled promise rejection: ", error));
-
 bot.on("ready", () => {
     console.info(`Logged in as ${bot.user?.tag}!`);
 });
