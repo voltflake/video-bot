@@ -1,23 +1,23 @@
 import type { AttachmentPayload, Message } from "discord.js";
-import { type Job, Mode } from "./types.js";
+import type { Job } from "./types.js";
 import { compressVideo } from "./video_compression.js";
 
 export async function processSingleVideo(url: string, size: number, job: Job) {
     switch (job.mode) {
-        case Mode.low_traffic: {
+        case "Low Traffic": {
             handleLowTrafficMode(job, url, size);
             break;
         }
-        case Mode.compromise: {
+        case "Compromise": {
             handleCompromiseMode(job, url, size);
             break;
         }
-        case Mode.beautiful: {
+        case "Beautiful": {
             handleBeautifulMode(job, url, size);
             break;
         }
         default: {
-            throw new Error("");
+            throw new Error("Unknown job type");
         }
     }
 }

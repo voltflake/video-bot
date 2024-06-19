@@ -5,10 +5,10 @@ import { processSingleVideo } from "../handle_single_video.js";
 import type { Job } from "../types.js";
 
 export default async function rocketapi(job: Job) {
+    if (job.rapidapi_key == null) throw new Error("Bad arguments");
+
     const regex_result = job.href.match(/(?<=instagram.com\/reel\/)[^/]+/gm);
-    if (regex_result == null) {
-        throw new Error("");
-    }
+    if (regex_result == null) throw new Error("Parsing instagram link failed");
 
     const rocketapi_url = "https://rocketapi-for-instagram.p.rapidapi.com/instagram/media/get_info_by_shortcode";
 

@@ -50,21 +50,21 @@ async function handleMessage(msg: Message) {
         console.warn(`Bot has no rights to edit messages in server named "${msg.guild?.name}"`);
     });
 
-    msg.channel.sendTyping();
-    const typingInterval = setInterval(() => {
-        msg.channel.sendTyping();
+    await msg.channel.sendTyping();
+    const typingInterval = setInterval(async () => {
+        await msg.channel.sendTyping();
     }, 5000);
 
     const running_jobs = [];
     for (const job of jobs) {
-        running_jobs.push(completeOrFailJob(job));
+        running_jobs.push(dispatchJob(job));
     }
 
     await Promise.allSettled(running_jobs);
     clearInterval(typingInterval);
 }
 
-async function completeOrFailJob(job: Job) {
+async function dispatchJob(job: Job) {
     // TODO add redundant (backup) modules in case first one fails
     switch (job.type) {
         case "YouTube": {
@@ -99,10 +99,10 @@ function searchJobs(message: Message) {
             continue;
         }
         jobs.push({
-            mode: settings.mode,
             type: "TikTok",
-            discord_message: message,
             href: url.href,
+            discord_message: message,
+            mode: settings.default_mode,
             rapidapi_key: settings.rapidapi_key
         });
     }
@@ -110,10 +110,10 @@ function searchJobs(message: Message) {
     for (const url of urls) {
         if (!url.hostname.endsWith("instagram.com")) continue;
         jobs.push({
-            mode: settings.mode,
             type: "Instagram",
-            discord_message: message,
             href: url.href,
+            discord_message: message,
+            mode: settings.default_mode,
             rapidapi_key: settings.rapidapi_key
         });
     }
@@ -121,11 +121,10 @@ function searchJobs(message: Message) {
     for (const url of urls) {
         if (!url.hostname.endsWith("youtube.com") && !url.hostname.endsWith("youtu.be")) continue;
         jobs.push({
-            mode: settings.mode,
             type: "YouTube",
-            discord_message: message,
             href: url.href,
-            rapidapi_key: settings.rapidapi_key
+            discord_message: message,
+            mode: settings.default_mode
         });
     }
 

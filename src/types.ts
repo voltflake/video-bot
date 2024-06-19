@@ -7,13 +7,13 @@ export type Settings = {
     token: string;
     codec: string;
     rapidapi_key: string;
-    mode: Mode;
+    default_mode: Mode;
 };
 
 export type Job = {
     href: string;
     discord_message: Message;
     type: URL_Type;
-    mode: Mode;
-    rapidapi_key: string;
+    mode?: Mode;
+    rapidapi_key?: string;
 };

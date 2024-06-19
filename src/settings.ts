@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import type { Interface } from "node:readline/promises";
-import { type Settings, Mode } from "./types.js";
+import type { Settings } from "./types.js";
 
 export async function getSettings(rl: Interface) {
     try {
@@ -31,7 +31,7 @@ async function startConfigWizard(rl: Interface) {
         token: "",
         codec: "h264",
         rapidapi_key: "",
-        mode: "Compromise"
+        default_mode: "Compromise"
     };
 
     console.info("settings.json is missing... Starting configuration wizard.");
@@ -63,9 +63,9 @@ async function startConfigWizard(rl: Interface) {
     console.info("Visit GitHub page for more info about modes.");
     console.info("https://github.com/voltflake/video-bot");
     const mode = Number.parseInt((await rl.question("Mode number: ")).trim());
-    if (mode === 1) settings.mode = "Low Traffic";
-    if (mode === 2) settings.mode = "Compromise";
-    if (mode === 3) settings.mode = "Beautiful";
+    if (mode === 1) settings.default_mode = "Low Traffic";
+    if (mode === 2) settings.default_mode = "Compromise";
+    if (mode === 3) settings.default_mode = "Beautiful";
 
     return settings;
 }

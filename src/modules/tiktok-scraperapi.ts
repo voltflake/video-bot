@@ -4,6 +4,8 @@ import type { Job } from "../types.js";
 import { processSingleVideo } from "../handle_single_video.js";
 
 export default async function scraperapi(job: Job) {
+    if (job.rapidapi_key == null) throw new Error("Bad arguments");
+
     const url_params = {
         url: job.href,
         hd: "1"
