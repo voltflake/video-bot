@@ -3,15 +3,17 @@
 import type { Job } from "../types.js";
 import { processSingleVideo } from "../handle_single_video.js";
 
-export default async function scraperapi(job: Job) {
-    if (job.rapidapi_key == null) throw new Error("Bad arguments");
+export async function scraperapi(job: Job) {
+    if (job.rapidapi_key == null) {
+        throw new Error("Bad arguments");
+    }
 
-    const url_params = {
+    const urlParams = {
         url: job.href,
         hd: "1"
     };
-    const url_params_str = new URLSearchParams(url_params).toString();
-    const apiUrl = `https://tiktok-scraper7.p.rapidapi.com/?${url_params_str}`;
+    const urlParamsStr = new URLSearchParams(urlParams).toString();
+    const apiUrl = `https://tiktok-scraper7.p.rapidapi.com/?${urlParamsStr}`;
     const options = {
         method: "GET",
         headers: {

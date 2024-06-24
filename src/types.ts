@@ -1,7 +1,7 @@
 import type { Message } from "discord.js";
 
 export type Mode = "Low Traffic" | "Compromise" | "Beautiful";
-export type URL_Type = "Instagram" | "YouTube" | "TikTok";
+export type urlType = "Instagram" | "YouTube" | "TikTok";
 
 export type Settings = {
     token: string;
@@ -13,7 +13,7 @@ export type Settings = {
 export type Job = {
     href: string;
     discord_message: Message;
-    type: URL_Type;
+    type: urlType;
     mode?: Mode;
     rapidapi_key?: string;
 };

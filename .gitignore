@@ -1,8 +1,7 @@
 node_modules/
-out/
+build/
 logs/
 videos/
 
 settings.json
 start.sh
-.prettierrc

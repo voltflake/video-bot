@@ -1,19 +1,19 @@
+import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { Client, GatewayIntentBits, type Message } from "discord.js";
-
-import rocketapi from "./modules/instagram-rocketapi.js";
-import scraperapi from "./modules/tiktok-scraperapi.js";
-import ytdlp from "./modules/youtube-ytdlp.js";
+import { rocketapi } from "./modules/instagram-rocketapi.js";
+import { scraperapi } from "./modules/tiktok-scraperapi.js";
+import { ytdlp } from "./modules/youtube-ytdlp.js";
 import { getSettings } from "./settings.js";
 import type { Job, Settings } from "./types.js";
 
-const rl = createInterface({ input: process.stdin, output: process.stdout });
+const rl = createInterface({ input: stdin, output: stdout });
 const bot = new Client({
     intents: [
         GatewayIntentBits.GuildMessageTyping |
-            GatewayIntentBits.MessageContent |
-            GatewayIntentBits.GuildMessages |
-            GatewayIntentBits.Guilds
+        GatewayIntentBits.MessageContent |
+        GatewayIntentBits.GuildMessages |
+        GatewayIntentBits.Guilds
     ]
 });
 
@@ -41,10 +41,17 @@ getSettings(rl).then((config: Settings) => {
 });
 
 async function handleMessage(msg: Message) {
-    if (msg.content === "") return;
-    if (msg.author.id === bot.user?.id) return;
+    if (msg.content === "") {
+        return;
+    }
+    if (msg.author.id === bot.user?.id) {
+        return;
+    }
+
     const jobs = searchJobs(msg);
-    if (jobs.length === 0) return;
+    if (jobs.length === 0) {
+        return;
+    }
 
     msg.suppressEmbeds(true).catch(() => {
         console.warn(`Bot has no rights to edit messages in server named "${msg.guild?.name}"`);
@@ -108,7 +115,9 @@ function searchJobs(message: Message) {
     }
 
     for (const url of urls) {
-        if (!url.hostname.endsWith("instagram.com")) continue;
+        if (!url.hostname.endsWith("instagram.com")) {
+            continue;
+        }
         jobs.push({
             type: "Instagram",
             href: url.href,
@@ -119,7 +128,9 @@ function searchJobs(message: Message) {
     }
 
     for (const url of urls) {
-        if (!url.hostname.endsWith("youtube.com") && !url.hostname.endsWith("youtu.be")) continue;
+        if (!(url.hostname.endsWith("youtube.com") || url.hostname.endsWith("youtu.be"))) {
+            continue;
+        }
         jobs.push({
             type: "YouTube",
             href: url.href,

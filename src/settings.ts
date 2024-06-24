@@ -10,10 +10,10 @@ export async function getSettings(rl: Interface) {
         return settings;
     } catch {
         const settings = await startConfigWizard(rl);
-        const string_data = JSON.stringify(settings);
-        await writeFile("./settings.json", string_data);
+        const stringData = JSON.stringify(settings);
+        await writeFile("./settings.json", stringData);
         displayLogo();
-        console.log("Created settings file.");
+        console.info("Created settings file.");
         return settings;
     }
 }
@@ -63,9 +63,20 @@ async function startConfigWizard(rl: Interface) {
     console.info("Visit GitHub page for more info about modes.");
     console.info("https://github.com/voltflake/video-bot");
     const mode = Number.parseInt((await rl.question("Mode number: ")).trim());
-    if (mode === 1) settings.default_mode = "Low Traffic";
-    if (mode === 2) settings.default_mode = "Compromise";
-    if (mode === 3) settings.default_mode = "Beautiful";
+    switch (mode) {
+        case 1:
+            settings.default_mode = "Low Traffic";
+            break;
+        case 2:
+            settings.default_mode = "Compromise";
+            break;
+        case 3:
+            settings.default_mode = "Beautiful";
+            break;
+        default:
+            settings.default_mode = "Beautiful";
+            break;
+    }
 
     return settings;
 }

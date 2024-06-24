@@ -5,15 +5,15 @@ import { compressVideo } from "./video_compression.js";
 export async function processSingleVideo(url: string, size: number, job: Job) {
     switch (job.mode) {
         case "Low Traffic": {
-            handleLowTrafficMode(job, url, size);
+            await handleLowTrafficMode(job, url, size);
             break;
         }
         case "Compromise": {
-            handleCompromiseMode(job, url, size);
+            await handleCompromiseMode(job, url, size);
             break;
         }
         case "Beautiful": {
-            handleBeautifulMode(job, url, size);
+            await handleBeautifulMode(job, url, size);
             break;
         }
         default: {
@@ -41,9 +41,9 @@ async function handleCompromiseMode(job: Job, url: string, size: number) {
         return;
     }
 
-    const compressed_video = await compressVideo(video);
-    if (compressed_video.byteLength <= 25 * 1024 * 1024) {
-        await reply(job.discord_message, "", [{ attachment: compressed_video, name: "compressed_video.mp4" }]);
+    const compressedVideo = await compressVideo(video);
+    if (compressedVideo.byteLength <= 25 * 1024 * 1024) {
+        await reply(job.discord_message, "", [{ attachment: compressedVideo, name: "compressed_video.mp4" }]);
         return;
     }
 
@@ -76,9 +76,16 @@ async function handleBeautifulMode(job: Job, url: string, size: number) {
 }
 
 async function reply(message: Message, text: string, attachment?: AttachmentPayload[]) {
+    if (attachment != null) {
+        await message.reply({
+            content: text,
+            files: attachment,
+            allowedMentions: { repliedUser: false }
+        });
+        return;
+    }
     await message.reply({
         content: text,
-        files: attachment,
         allowedMentions: { repliedUser: false }
     });
 }

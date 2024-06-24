@@ -6,16 +6,10 @@
 	"linter": {
 		"enabled": true,
 		"rules": {
-			"recommended": true
-		}
-	},
-	"javascript": {
-		"formatter": {
-			"lineWidth": 120,
-			"trailingCommas": "none",
-			"indentWidth": 4,
-			"indentStyle": "space",
-			"semicolons": "always"
+			"all": true,
+			"correctness": {
+				"noNodejsModules": "off"
+			}
 		}
 	}
 }
