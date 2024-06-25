@@ -4,7 +4,11 @@ import { easySpawn } from "./helper_functions.js";
 // rpi can't hv-encode videos with bitrate less than 150kb/s
 // change codec to "h264_omx" in settings.json if you want to use Raspberry Pi hardware encoding
 export async function compressVideo(data: ArrayBuffer) {
-  const { codec } = JSON.parse((await readFile("./settings.json")).toString());
+  let codec = process.env["CODEC"];
+  if (codec == null) {
+    codec = "h264";
+  }
+
   try {
     await access("./logs");
   } catch {

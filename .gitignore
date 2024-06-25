@@ -4,6 +4,6 @@ logs/
 videos/
 example_responses/
 
-.env
+*.env
 start.sh
 biome.json
