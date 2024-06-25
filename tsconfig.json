@@ -26,6 +26,8 @@
         "useUnknownInCatchVariables": true,
         "outDir": "build",
         "strict": true,
-        "alwaysStrict": true
+        "alwaysStrict": true,
+        "target": "ESNext",
+        "lib": ["ESNext"]
     }
 }

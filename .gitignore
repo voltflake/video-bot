@@ -2,6 +2,8 @@ node_modules/
 build/
 logs/
 videos/
+example_responses/
 
-settings.json
+.env
 start.sh
+biome.json
