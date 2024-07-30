@@ -13,6 +13,7 @@ if (process.env["DISCORD_TOKEN"] == null) {
   console.error("Discord token is not provided. Exiting...");
   process.exit(1);
 }
+
 const client = new Client({
   auth: `Bot ${process.env["DISCORD_TOKEN"]}`,
   gateway: { intents: ["MESSAGE_CONTENT", "GUILDS", "GUILD_MESSAGES"] }
@@ -38,57 +39,85 @@ client.on("messageCreate", handleMessage);
 // Connect to Discord
 client.connect();
 
-async function handleMessage(msg: Message) {
-  if (msg.author.id === client.user?.id) {
+async function handleMessage(original_message: Message) {
+  if (original_message.author.id === client.user?.id) {
     return;
   }
 
-  const task = SearchForTask(msg.content);
+  const task = SearchForTask(original_message.content);
   if (task === null) {
     return;
   }
 
-  if (msg.channel == null) return;
+  const current_channel = original_message.channel
+  if (current_channel == null) return;
 
-  const statusMessage = msg.channel.createMessage({
+  const status_message_promise = current_channel.createMessage({
     content: `⏳ Processing ${task.type} link...`,
-    messageReference: { messageID: msg.id },
+    messageReference: { messageID: original_message.id },
     allowedMentions: { repliedUser: false }
   })
 
-  await msg.channel.editMessage(msg.id, { flags: MessageFlags.SUPPRESS_EMBEDS }).catch(() => {
-    console.warn(`Bot has no rights to edit message flags in server "${msg.guild?.name}"`);
-  })
+  let remove_embeds_promise = undefined;
+  if (task.type !== "YouTube") {
+    try {
+      remove_embeds_promise = current_channel.editMessage(original_message.id, { flags: MessageFlags.SUPPRESS_EMBEDS })
+    } catch (error) {
+      console.warn(`Bot has no rights to edit message flags in server "${original_message.guild?.name}"`);
+    }
+  }
 
-  const items = await getContent(task);
+  const status_message = await status_message_promise;
 
-  const replyMessage = await statusMessage;
+  let items: Array<Item>;
+  try {
+    items = await getContent(task);
+  } catch (error: any) {
+    await current_channel.editMessage(status_message.id, {
+      content: `⚠️ Error: Unable to retrieve the required data from the provided URL.`,
+      allowedMentions: { repliedUser: false }
+    })
+    return;
+  }
 
-  await finishTask(replyMessage, items);
+  if (remove_embeds_promise !== undefined) {
+    await remove_embeds_promise;
+  }
+
+  await finishTask(status_message, task, items);
 }
 
-async function finishTask(messageToEdit: Message, itemsToInclude: Item[]) {
-  const attachments: File[] = [];
+async function finishTask(status_message: Message, task: Task, itemsToInclude: Item[]) {
+  if (status_message.channel == null) return;
+
+  const attachments: Array<File> = [];
   for (const item of itemsToInclude) {
     if (item.size == null) {
-      item.size = await validateAndGetContentLength(item.url);
-    }
-
-    if (item.size == null) {
-      throw new Error("Unable to get item size.");
+      try {
+        item.size = await validateAndGetContentLength(item.url);
+      } catch (error: any) {
+        await status_message.channel.editMessage(status_message.id, {
+          content: `⚠️ Error: File size could not be obtained.`,
+          allowedMentions: { repliedUser: false }
+        })
+        return;
+      }
     }
 
     if (item.size >= 100 * 1024 * 1024) {
-      await messageToEdit.edit({
-        content: "⛔ One of items is too big to process.",
+      if (task.type === "YouTube") {
+        return;
+      }
+      await status_message.edit({
+        content: "⚠️ Error: File size is too big.",
         allowedMentions: { repliedUser: false }
       });
       return;
     }
 
     if (item.type !== "Video" && item.size > 25 * 1024 * 1024) {
-      await messageToEdit.edit({
-        content: "⛔ One of items is too big to process.",
+      await status_message.edit({
+        content: "⚠️ Error: An image or a song exceeds Discord upload limits.",
         allowedMentions: { repliedUser: false }
       });
       return;
@@ -102,10 +131,14 @@ async function finishTask(messageToEdit: Message, itemsToInclude: Item[]) {
           attachments.push({ contents: compressedVideo, name: "video.mp4" });
           continue;
         }
-        throw new Error("Compressed video is too big.");
+        await status_message.edit({
+          content: "⚠️ Error: Video file exceeds Discord upload limits, even after compression.",
+          allowedMentions: { repliedUser: false }
+        });
+        return;
       } catch {
-        await messageToEdit.edit({
-          content: "⛔ Video compression failed.",
+        await status_message.edit({
+          content: "⚠️ Error: Video compression failed.",
           allowedMentions: { repliedUser: false }
         });
         return;
@@ -129,8 +162,8 @@ async function finishTask(messageToEdit: Message, itemsToInclude: Item[]) {
       }
     }
   }
-  await messageToEdit.edit({
-    content: "",
+  await status_message.edit({
+    content: "✅ Success",
     files: attachments,
     allowedMentions: { repliedUser: false }
   });
@@ -144,6 +177,7 @@ async function downloadFile(url: string) {
 async function getContent(task: Task) {
   // TODO add redundant (backup) modules in case first one fails
   switch (task.type) {
+    case "YouTube Shorts":
     case "YouTube": {
       return await ytdlp(task.href);
     }
@@ -175,6 +209,9 @@ function SearchForTask(text: string): Task | null {
       return { href: url.href, type: "Instagram" };
     }
     if (url.hostname.endsWith("youtube.com") || url.hostname.endsWith("youtu.be")) {
+      if (url.href.includes("shorts")) {
+        return { href: url.href, type: "YouTube Shorts" }
+      }
       return { href: url.href, type: "YouTube" };
     }
   }

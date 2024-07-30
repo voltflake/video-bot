@@ -5,6 +5,6 @@ export type Item = {
 };
 
 export type Task = {
-  type: "TikTok" | "YouTube" | "Instagram";
+  type: "TikTok" | "YouTube" | "Instagram" | "YouTube Shorts";
   href: string;
 };
