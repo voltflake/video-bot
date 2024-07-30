@@ -1,4 +1,3 @@
-import "dotenv/config";
 import { createInterface } from "node:readline/promises";
 import { Client, type Message, MessageFlags, type File } from "oceanic.js";
 import { rocketapi } from "./modules/instagram-rocketapi.js";
@@ -72,13 +71,7 @@ async function finishTask(messageToEdit: Message, itemsToInclude: Item[]) {
   const attachments: File[] = [];
   for (const item of itemsToInclude) {
     if (item.size == null) {
-      for (let i = 0; i < 3; i++) {
-        try {
-          item.size = await validateAndGetContentLength(item.url);
-        } catch {
-          // empty
-        }
-      }
+      item.size = await validateAndGetContentLength(item.url);
     }
 
     if (item.size == null) {

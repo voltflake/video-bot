@@ -1,23 +1,20 @@
-import util from "node:util";
-import { exec } from "node:child_process";
+export async function validateAndGetContentLength(url: string) {
+  for (let i = 3; i >= 1 ; i--) {
+    
+    const response = await fetch(url, { method: "HEAD" });
+    if (!response.ok || i === 1) {
+      throw new Error("bad response to HEAD request");
+    }
 
-const promisifiedExec = util.promisify(exec);
-export async function easySpawn(command: string) {
-  const { stdout, stderr } = await promisifiedExec(command);
-  return { stdout, stderr };
-}
-
-export async function validateAndGetContentLength(url: string): Promise<number> {
-  const response = await fetch(url, { method: "HEAD" });
-  if (!response.ok) {
-    throw new Error();
-  }
-  let contentLength = response.headers.get("content-length");
-  if (contentLength == null) {
+    let contentLength = response.headers.get("content-length");
+    if (contentLength != null) {
+      return Number.parseInt(contentLength);
+    }
     contentLength = response.headers.get("Content-Length");
+    if (contentLength != null) {
+      return Number.parseInt(contentLength);
+    }
+    await Bun.sleep(100);
   }
-  if (contentLength == null) {
-    throw new Error("No content length provided.");
-  }
-  return Number.parseInt(contentLength);
+  throw new Error("No content length provided.");
 }

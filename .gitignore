@@ -1,9 +1,10 @@
-node_modules/
-build/
-logs/
-videos/
-example_responses/
+/node_modules
+/build
+/logs
+/videos
+/example_responses
+/.vscode
 
-*.env
+.env
 start.sh
 biome.json
