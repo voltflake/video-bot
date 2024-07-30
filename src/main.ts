@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { createInterface } from "node:readline/promises";
-import { Client, GatewayIntentBits, type AttachmentPayload, type Message } from "discord.js";
+import { Client, type Message, MessageFlags, type File } from "oceanic.js";
 import { rocketapi } from "./modules/instagram-rocketapi.js";
 import { scraperapi } from "./modules/tiktok-scraperapi.js";
 import { ytdlp } from "./modules/youtube-ytdlp.js";
@@ -9,13 +9,14 @@ import { validateAndGetContentLength } from "./helper_functions.js";
 import { compressVideo } from "./video_compression.js";
 
 const rl = createInterface({ input: process.stdin, output: process.stdout });
-const bot = new Client({
-  intents: [
-    GatewayIntentBits.GuildMessageTyping |
-      GatewayIntentBits.MessageContent |
-      GatewayIntentBits.GuildMessages |
-      GatewayIntentBits.Guilds
-  ]
+
+if (process.env["DISCORD_TOKEN"] == null) {
+  console.error("Discord token is not provided. Exiting...");
+  process.exit(1);
+}
+const client = new Client({
+  auth: `Bot ${process.env["DISCORD_TOKEN"]}`,
+  gateway: { intents: ["MESSAGE_CONTENT", "GUILDS", "GUILD_MESSAGES"] }
 });
 
 // Listen for SIGINT on windows hosts
@@ -25,25 +26,21 @@ if (process.platform === "win32") {
 
 // Graceful shutdown
 process.on("SIGINT", () => {
-  bot.destroy();
+  client.disconnect(false);
   process.exit(0);
 });
 
-bot.on("ready", () => {
-  console.info(`Logged in as ${bot.user?.tag}!`);
+client.on("ready", () => {
+  console.info(`Logged in as ${client.user?.tag}!`);
 });
 
-bot.on("messageCreate", handleMessage);
+client.on("messageCreate", handleMessage);
 
-if (process.env["DISCORD_TOKEN"] == null) {
-  console.error("Discord token is not provided. Exiting...");
-  process.exit(1);
-}
-
-bot.login(process.env["DISCORD_TOKEN"]);
+// Connect to Discord
+client.connect();
 
 async function handleMessage(msg: Message) {
-  if (msg.author.id === bot.user?.id) {
+  if (msg.author.id === client.user?.id) {
     return;
   }
 
@@ -52,14 +49,17 @@ async function handleMessage(msg: Message) {
     return;
   }
 
-  const statusMessage = msg.reply({
-    content: `⏳ Processing ${task.type} link...`,
-    allowedMentions: { repliedUser: false }
-  });
+  if (msg.channel == null) return;
 
-  msg.suppressEmbeds().catch(() => {
+  const statusMessage = msg.channel.createMessage({
+    content: `⏳ Processing ${task.type} link...`,
+    messageReference: { messageID: msg.id },
+    allowedMentions: { repliedUser: false }
+  })
+
+  await msg.channel.editMessage(msg.id, { flags: MessageFlags.SUPPRESS_EMBEDS }).catch(() => {
     console.warn(`Bot has no rights to edit message flags in server "${msg.guild?.name}"`);
-  });
+  })
 
   const items = await getContent(task);
 
@@ -69,7 +69,7 @@ async function handleMessage(msg: Message) {
 }
 
 async function finishTask(messageToEdit: Message, itemsToInclude: Item[]) {
-  const attachments: AttachmentPayload[] = [];
+  const attachments: File[] = [];
   for (const item of itemsToInclude) {
     if (item.size == null) {
       for (let i = 0; i < 3; i++) {
@@ -106,7 +106,7 @@ async function finishTask(messageToEdit: Message, itemsToInclude: Item[]) {
       try {
         const compressedVideo = await compressVideo(video);
         if (compressedVideo.byteLength <= 25 * 1024 * 1024) {
-          attachments.push({ attachment: compressedVideo, name: "video.mp4" });
+          attachments.push({ contents: compressedVideo, name: "video.mp4" });
           continue;
         }
         throw new Error("Compressed video is too big.");
@@ -123,15 +123,15 @@ async function finishTask(messageToEdit: Message, itemsToInclude: Item[]) {
     const file = await downloadFile(item.url);
     switch (item.type) {
       case "Video": {
-        attachments.push({ attachment: Buffer.from(file), name: "video.mp4" });
+        attachments.push({ contents: Buffer.from(file), name: "video.mp4" });
         break;
       }
       case "Image": {
-        attachments.push({ attachment: Buffer.from(file), name: "image.png" });
+        attachments.push({ contents: Buffer.from(file), name: "image.png" });
         break;
       }
       case "Audio": {
-        attachments.push({ attachment: Buffer.from(file), name: "music.mp3" });
+        attachments.push({ contents: Buffer.from(file), name: "music.mp3" });
         break;
       }
     }
