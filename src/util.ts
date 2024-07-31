@@ -1,6 +1,16 @@
+export type Item = {
+  type: "Video" | "Image" | "Audio";
+  size: number;
+  url: string;
+};
+
+export type Task = {
+  type: "TikTok" | "YouTube" | "Instagram" | "YouTube Shorts";
+  href: string;
+};
+
 export async function validateAndGetContentLength(url: string) {
   for (let i = 3; i >= 1 ; i--) {
-    
     const response = await fetch(url, { method: "HEAD" });
     if (!response.ok || i === 1) {
       throw new Error("recieved bad response to HEAD request.");
@@ -10,10 +20,12 @@ export async function validateAndGetContentLength(url: string) {
     if (contentLength != null) {
       return Number.parseInt(contentLength);
     }
+    
     contentLength = response.headers.get("Content-Length");
     if (contentLength != null) {
       return Number.parseInt(contentLength);
     }
+
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error("No content length header was found in HEAD response.");

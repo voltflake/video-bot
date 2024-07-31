@@ -1,6 +1,10 @@
-import type { Item } from "../types.js";
+import { validateAndGetContentLength, type Item } from "./util.js";
 
-export async function scraperapi(tiktokUrl: string): Promise<Array<Item>> {
+export async function extractTiktokContent(url: string) {
+  return scraperapi(url);
+}
+
+async function scraperapi(tiktokUrl: string): Promise<Array<Item>> {
   const key = process.env["RAPIDAPI_KEY"];
   if (key == null) {
     throw new Error("RapidAPI key is not provided. Check bot configuration.");
@@ -51,10 +55,10 @@ export async function scraperapi(tiktokUrl: string): Promise<Array<Item>> {
 
     const result = [];
     for (const image of json.data.images) {
-      const item: Item = {url: image, type: "Image"}
+      const item: Item = {url: image, type: "Image", size: await validateAndGetContentLength(image)}
       result.push(item);
     }
-    const item: Item = {url: json.data.music, type: "Audio"}
+    const item: Item = {url: json.data.music, type: "Audio", size: await validateAndGetContentLength(json.data.music)}
     result.push(item);
     return result;
   }

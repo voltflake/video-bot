@@ -1,14 +1,7 @@
 import { readFile, writeFile, unlink, access, constants } from "node:fs/promises";
 import { execFile } from 'node:child_process';
 
-// rpi can't hv-encode videos with bitrate less than 150kb/s
-// change codec to "h264_omx" in settings.json if you want to use Raspberry Pi hardware encoding
 export async function compressVideo(data: ArrayBuffer) {
-  let codec = process.env["CODEC"];
-  if (codec == null) {
-    codec = "h264";
-  }
-
   // locking mechanism to allow only one compression job at a time
   const filename_lock = "./videos/compressing.lock";
   while (true) {
@@ -33,22 +26,27 @@ export async function compressVideo(data: ArrayBuffer) {
   const available_bits_per_second = (25 * 1024 * 1024 * 8 * 0.96) / original_info.duration_in_seconds;
 
   // 0.80 is additional space if some video gets over +10% bitrate it was given
+  // Note that Raspberry Pi with h264_omx codec can't hv-encode videos with bitrate less than 150kb/s
   const required_video_bitrate = Math.floor((available_bits_per_second - original_info.audio_bitrate) * 0.9);
 
   const ffmpeg_args = [
     "-i", `${filename}`, "-y",
     "-c:a", "copy",
-    "-b:v", `${required_video_bitrate.toString()}`,
-    "-c:v", `${codec}`,
-    `${filename_compressed}`
+    "-b:v", `${required_video_bitrate.toString()}`
   ];
+  if (process.env["CODEC"] != null) {
+    ffmpeg_args.push("-c:v");
+    ffmpeg_args.push(process.env["CODEC"]);
+  }
+  ffmpeg_args.push(filename_compressed);
+
   await new Promise<void>((resolve) => {
     execFile("ffmpeg", ffmpeg_args,
       async (error) => {
         if (error == null) { resolve(); }
         else {
           await unlink(filename_lock);
-          throw new Error(`execFile failed: ffmpeg ${ffmpeg_args.join(" ")}`);
+          throw new Error("execFile failed (ffmpeg).\nCheck if you have ffmpeg installed and it's available in PATH.");
         }
       });
   });
@@ -89,9 +87,7 @@ export async function compressVideo(data: ArrayBuffer) {
 }
 
 async function ffprobe(filename: string) {
-
-
-  const ffprobe_output: any = await new Promise((resolve) => {
+  const ffprobe_output: string = await new Promise((resolve) => {
     execFile("ffprobe", [
       "-v",
       "quiet",
@@ -101,12 +97,7 @@ async function ffprobe(filename: string) {
       { encoding: "utf-8" },
       (error, stdout) => {
         if (error == null) resolve(stdout);
-        else throw new Error(`execFile failed: ${"ffprobe " + [
-          "-v",
-          "quiet",
-          "-print_format", "json",
-          "-show_streams",
-          `${filename}`].join(" ")}`);
+        else throw new Error("execFile failed (ffprobe).\nCheck if you have ffmpeg installed and it's available in PATH.");
       });
   });
 

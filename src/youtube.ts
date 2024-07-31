@@ -1,10 +1,13 @@
-import { validateAndGetContentLength } from "../helper_functions.js";
-import type { Item } from "../types.js";
+import { validateAndGetContentLength, type Item } from "./util.js";
 import { execFile } from 'node:child_process';
 
-export async function ytdlp(youtubeUrl: string) {
+export async function extractYoutubeContent(url: string) {
+  return ytdlp(url);
+}
+
+async function ytdlp(url: string) {
   const program_output: string = await new Promise((resolve) => {
-    execFile("yt-dlp", ["-f", "mp4", "--print", "urls", `${youtubeUrl}`],
+    execFile("yt-dlp", ["-f", "mp4", "--print", "urls", `${url}`],
       { encoding: "utf-8" },
       (error, stdout) => {
         if (error == null) resolve(stdout);

@@ -1,12 +1,11 @@
 import { createInterface } from "node:readline/promises";
-import { Client, type Message, MessageFlags, type File } from "oceanic.js";
-import { rocketapi } from "./modules/instagram-rocketapi.js";
-import { scraperapi } from "./modules/tiktok-scraperapi.js";
-import { ytdlp } from "./modules/youtube-ytdlp.js";
-import type { Task, Item } from "./types.js";
-import { validateAndGetContentLength } from "./helper_functions.js";
-import { compressVideo } from "./video_compression.js";
 import { access, mkdir, unlink } from "node:fs/promises";
+import { Client, type Message, MessageFlags, type File } from "oceanic.js";
+import { compressVideo } from "./video_compression.js";
+import type { Task, Item } from "./util.js";
+import { extractInstagramContent } from "./instagram.js";
+import { extractTiktokContent } from "./tiktok.js";
+import { extractYoutubeContent } from "./youtube.js";
 
 const rl = createInterface({ input: process.stdin, output: process.stdout });
 
@@ -101,25 +100,8 @@ async function handleMessage(original_message: Message) {
     await remove_embeds_promise;
   }
 
-  await finishTask(status_message, task, items);
-}
-
-async function finishTask(status_message: Message, task: Task, itemsToInclude: Item[]) {
-  if (status_message.channel == null) return;
-
   const attachments: Array<File> = [];
-  for (const item of itemsToInclude) {
-    if (item.size == null) {
-      try {
-        item.size = await validateAndGetContentLength(item.url);
-      } catch (error: any) {
-        await status_message.channel.editMessage(status_message.id, {
-          content: `⚠️ Error: File size could not be obtained.`,
-          allowedMentions: { repliedUser: false }
-        })
-        return;
-      }
-    }
+  for (const item of items) {
 
     if (item.size >= 100 * 1024 * 1024) {
       if (task.type === "YouTube") {
@@ -142,7 +124,7 @@ async function finishTask(status_message: Message, task: Task, itemsToInclude: I
     }
 
     if (item.type === "Video" && item.size > 25 * 1024 * 1024) {
-      const video = await downloadFile(item.url);
+      const video = await (await fetch(item.url)).arrayBuffer();
       try {
         const compressedVideo = await compressVideo(video);
         if (compressedVideo.byteLength <= 25 * 1024 * 1024) {
@@ -164,7 +146,7 @@ async function finishTask(status_message: Message, task: Task, itemsToInclude: I
     }
 
     // TODO: find a way to detect a proper filetype
-    const file = await downloadFile(item.url);
+    const file = await (await fetch(item.url)).arrayBuffer();
     switch (item.type) {
       case "Video": {
         attachments.push({ contents: Buffer.from(file), name: "video.mp4" });
@@ -187,23 +169,18 @@ async function finishTask(status_message: Message, task: Task, itemsToInclude: I
   });
 }
 
-async function downloadFile(url: string) {
-  const response = await fetch(url);
-  return await response.arrayBuffer();
-}
-
 async function getContent(task: Task) {
   // TODO add redundant (backup) modules in case first one fails
   switch (task.type) {
     case "YouTube Shorts":
     case "YouTube": {
-      return await ytdlp(task.href);
+      return await extractYoutubeContent(task.href);
     }
     case "Instagram": {
-      return await rocketapi(task.href);
+      return await extractInstagramContent(task.href);
     }
     case "TikTok": {
-      return await scraperapi(task.href);
+      return await extractTiktokContent(task.href);
     }
   }
 }
