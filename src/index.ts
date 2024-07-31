@@ -69,7 +69,7 @@ async function handleMessage(original_message: Message) {
   if (current_channel == null) return;
 
   const status_message_promise = current_channel.createMessage({
-    content: `⏳ Processing ${task.type} link...`,
+    content: `⏳ Extracting content from ${task.type}...`,
     messageReference: { messageID: original_message.id },
     allowedMentions: { repliedUser: false }
   })
@@ -89,16 +89,15 @@ async function handleMessage(original_message: Message) {
   try {
     items = await getContent(task);
   } catch (error: any) {
-    await current_channel.editMessage(status_message.id, {
-      content: `⚠️ Error: Unable to retrieve the required data from the provided URL.\nyt-dlp: ${error.message}`,
-      allowedMentions: { repliedUser: false }
-    })
+    await updateStatus(`⚠️ Error: Unable to retrieve the required data from the provided URL.\n${error.message}`);
     return;
   }
 
   if (remove_embeds_promise !== undefined) {
     await remove_embeds_promise;
   }
+
+  await updateStatus(`⏳ Processing content...`);
 
   const attachments: Array<File> = [];
   for (const item of items) {
@@ -108,41 +107,29 @@ async function handleMessage(original_message: Message) {
         await status_message.delete("Task canceled.");
         return;
       }
-      await status_message.edit({
-        content: "⚠️ Error: File size is too big.",
-        allowedMentions: { repliedUser: false }
-      });
+      await updateStatus("⚠️ Error: File size is too big.");
       return;
     }
-
+    
     if (item.type !== "Video" && item.size > 25 * 1024 * 1024) {
-      await status_message.edit({
-        content: "⚠️ Error: An image or a song exceeds Discord upload limits.",
-        allowedMentions: { repliedUser: false }
-      });
+      await updateStatus("⚠️ Error: An image or a song exceeds Discord upload limits.");
       return;
     }
 
     if (item.type === "Video" && item.size > 25 * 1024 * 1024) {
       const video = await (await fetch(item.url)).arrayBuffer();
+      await updateStatus(`⏳ Compressing video...`);
       try {
         const compressedVideo = await compressVideo(video);
         if (compressedVideo.byteLength <= 25 * 1024 * 1024) {
           attachments.push({ contents: compressedVideo, name: "video.mp4" });
           continue;
         }
-        await status_message.edit({
-          content: "⚠️ Error: Video file exceeds Discord upload limits, even after compression.",
-          allowedMentions: { repliedUser: false }
-        });
-        return;
+        await updateStatus("⚠️ Error: Video file exceeds Discord upload limits, even after compression.");
       } catch {
-        await status_message.edit({
-          content: "⚠️ Error: Video compression failed.",
-          allowedMentions: { repliedUser: false }
-        });
-        return;
+        await updateStatus("⚠️ Error: Video compression failed.");
       }
+      return;
     }
 
     // TODO: find a way to detect a proper filetype
@@ -162,17 +149,27 @@ async function handleMessage(original_message: Message) {
       }
     }
   }
+  await updateStatus(`⏳ Uploading content to Discord...`);
   await status_message.edit({
     content: "✅ Success",
     files: attachments,
     allowedMentions: { repliedUser: false }
   });
+
+  return;
+  async function updateStatus(text: string) {
+    await status_message.edit({
+      content: text,
+      allowedMentions: { repliedUser: false }
+    })
+  }
+
 }
 
 async function getContent(task: Task) {
   // TODO add redundant (backup) modules in case first one fails
   switch (task.type) {
-    case "YouTube Shorts":
+    case "YouTube Short":
     case "YouTube": {
       return await extractYoutubeContent(task.href);
     }
@@ -205,7 +202,7 @@ function SearchForTask(text: string): Task | null {
     }
     if (url.hostname.endsWith("youtube.com") || url.hostname.endsWith("youtu.be")) {
       if (url.href.includes("shorts")) {
-        return { href: url.href, type: "YouTube Shorts" }
+        return { href: url.href, type: "YouTube Short" }
       }
       return { href: url.href, type: "YouTube" };
     }
