@@ -1,8 +1,9 @@
 {
   "name": "video-bot",
-  "module": "src/index.ts",
+  "module": "build/index.js",
   "type": "module",
   "dependencies": {
+    "@types/node": "^22.0.0",
     "oceanic.js": "^1.11.1",
     "typescript": "^5.5.4"
   }

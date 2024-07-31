@@ -6,6 +6,7 @@ import { ytdlp } from "./modules/youtube-ytdlp.js";
 import type { Task, Item } from "./types.js";
 import { validateAndGetContentLength } from "./helper_functions.js";
 import { compressVideo } from "./video_compression.js";
+import { access, mkdir, unlink } from "node:fs/promises";
 
 const rl = createInterface({ input: process.stdin, output: process.stdout });
 
@@ -35,6 +36,22 @@ client.on("ready", () => {
 });
 
 client.on("messageCreate", handleMessage);
+
+try {
+  await access("./logs");
+} catch {
+  await mkdir("./logs");
+}
+
+try {
+  await access("./videos");
+} catch {
+  await mkdir("./videos");
+}
+
+try {
+  await unlink("./videos/compressing.lock");
+} catch {}
 
 // Connect to Discord
 client.connect();
@@ -74,7 +91,7 @@ async function handleMessage(original_message: Message) {
     items = await getContent(task);
   } catch (error: any) {
     await current_channel.editMessage(status_message.id, {
-      content: `⚠️ Error: Unable to retrieve the required data from the provided URL.`,
+      content: `⚠️ Error: Unable to retrieve the required data from the provided URL.\nyt-dlp: ${error.message}`,
       allowedMentions: { repliedUser: false }
     })
     return;
@@ -106,6 +123,7 @@ async function finishTask(status_message: Message, task: Task, itemsToInclude: I
 
     if (item.size >= 100 * 1024 * 1024) {
       if (task.type === "YouTube") {
+        await status_message.delete("Task canceled.");
         return;
       }
       await status_message.edit({

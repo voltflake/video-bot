@@ -3,7 +3,7 @@ export async function validateAndGetContentLength(url: string) {
     
     const response = await fetch(url, { method: "HEAD" });
     if (!response.ok || i === 1) {
-      throw new Error("bad response to HEAD request");
+      throw new Error("recieved bad response to HEAD request.");
     }
 
     let contentLength = response.headers.get("content-length");
@@ -14,7 +14,7 @@ export async function validateAndGetContentLength(url: string) {
     if (contentLength != null) {
       return Number.parseInt(contentLength);
     }
-    await Bun.sleep(100);
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error("No content length provided.");
+  throw new Error("No content length header was found in HEAD response.");
 }
