@@ -7,6 +7,7 @@ import { extractInstagramContent } from "./instagram.js";
 import { extractTiktokContent } from "./tiktok.js";
 import { extractYoutubeContent } from "./youtube.js";
 import { createSlideshowVideo } from "./slideshow.js";
+import 'dotenv/config'
 
 const rl = createInterface({ input: process.stdin, output: process.stdout });
 
