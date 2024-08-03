@@ -133,6 +133,7 @@ export async function createSlideshowVideo(items: Array<Item>) {
             current_filter_result += 1;
             current_second_input = second_input;
         }
+        ffmpeg_command = ffmpeg_command.slice(0, -1);
         ffmpeg_command = ffmpeg_command.concat(`" -map "[m${current_filter_result}]" -c:v ${codec} -pix_fmt yuv420p -framerate 60 -frames ${loop_duration} videos/${timestamp}-slideshow_loop.mp4`);
 
         await new Promise<void>((resolve) => {
