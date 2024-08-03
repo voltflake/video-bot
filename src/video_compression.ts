@@ -1,7 +1,7 @@
 import { readFile, writeFile, unlink, access, constants } from "node:fs/promises";
 import { execFile } from 'node:child_process';
 
-export async function compressVideo(data: ArrayBuffer) {
+export async function compressVideo(data: Blob) {
   // locking mechanism to allow only one compression job at a time
   const filename_lock = "./videos/compressing.lock";
   while (true) {
@@ -19,7 +19,7 @@ export async function compressVideo(data: ArrayBuffer) {
   const filename_compressed = `./videos/${timestamp}_compressed.mp4`;
   const filename_log = `./logs/${timestamp}.txt`;
 
-  await writeFile(filename, new Uint8Array(data));
+  await writeFile(filename, Buffer.from(await data.arrayBuffer()));
   const original_info = await ffprobe(filename);
 
   // 4% reserved for muxing overhead
@@ -51,7 +51,7 @@ export async function compressVideo(data: ArrayBuffer) {
       });
   });
 
-  const compressed_video = Buffer.from(await readFile(filename_compressed));
+  const compressed_video = new Blob([await readFile(filename_compressed)]);
   const compressed_info = await ffprobe(filename_compressed);
 
   // Uncomment this section to remove temporary files after compression.
@@ -69,12 +69,12 @@ export async function compressVideo(data: ArrayBuffer) {
   const log = [];
   log.push(`ffmpeg info: ${ffmpeg_args}\n`);
   log.push(`video duration: ${video_duration.toFixed(2)}s\n`);
-  log.push(`original file size: ${(data.byteLength / (1024 * 1024)).toFixed(2)}MB\n`);
+  log.push(`original file size: ${(data.size / (1024 * 1024)).toFixed(2)}MB\n`);
   log.push(`original video stream: bitrate=${original_info.video_bitrate} `);
   log.push(`size=${calcSize(original_info.video_bitrate).toFixed(2)}MB\n`);
   log.push(`original audio stream: bitrate=${original_info.audio_bitrate} `);
   log.push(`size=${calcSize(original_info.audio_bitrate).toFixed(2)}MB\n`);
-  log.push(`resulted file size: ${(compressed_video.byteLength / (1024 * 1024)).toFixed(2)}MB\n`);
+  log.push(`resulted file size: ${(compressed_video.size / (1024 * 1024)).toFixed(2)}MB\n`);
   log.push(`resulted video stream: bitrate=${compressed_info.video_bitrate} `);
   log.push(`size=${calcSize(compressed_info.video_bitrate).toFixed(2)}MB\n`);
   log.push(`resulted audio stream: bitrate=${compressed_info.audio_bitrate} `);

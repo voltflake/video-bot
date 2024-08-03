@@ -1,11 +1,12 @@
 import { createInterface } from "node:readline/promises";
 import { access, mkdir, unlink } from "node:fs/promises";
-import { Client, type Message, MessageFlags, type File } from "oceanic.js";
+import { createBot, FileContent, Intents, MessageFlags, type Message } from "discordeno";
 import { compressVideo } from "./video_compression.js";
 import type { Task, Item } from "./util.js";
 import { extractInstagramContent } from "./instagram.js";
 import { extractTiktokContent } from "./tiktok.js";
 import { extractYoutubeContent } from "./youtube.js";
+import { createSlideshowVideo } from "./slideshow.js";
 
 const rl = createInterface({ input: process.stdin, output: process.stdout });
 
@@ -14,9 +15,14 @@ if (process.env["DISCORD_TOKEN"] == null) {
   process.exit(1);
 }
 
-const client = new Client({
-  auth: `Bot ${process.env["DISCORD_TOKEN"]}`,
-  gateway: { intents: ["MESSAGE_CONTENT", "GUILDS", "GUILD_MESSAGES"] }
+const bot = createBot({
+  intents: Intents.Guilds | Intents.MessageContent | Intents.GuildMessages,
+  token: process.env["DISCORD_TOKEN"],
+  desiredProperties: {
+    message: { author: true, channelId: true, attachments: true, id: true, guildId: true, content: true },
+    user: { id: true, username: true, discriminator: true },
+    attachment: { url: true, proxyUrl: true, id: true, filename: true, size: true }
+  }
 });
 
 // Listen for SIGINT on windows hosts
@@ -25,16 +31,16 @@ if (process.platform === "win32") {
 }
 
 // Graceful shutdown
-process.on("SIGINT", () => {
-  client.disconnect(false);
+process.on("SIGINT", async () => {
+  await bot.shutdown();
   process.exit(0);
 });
 
-client.on("ready", () => {
-  console.info(`Logged in as ${client.user?.tag}!`);
-});
+bot.events.ready = async (payload) => {
+  console.info(`Logged in as ${payload.user.tag}`);
+};
 
-client.on("messageCreate", handleMessage);
+bot.events.messageCreate = handleMessage;
 
 try {
   await access("./logs");
@@ -50,13 +56,13 @@ try {
 
 try {
   await unlink("./videos/compressing.lock");
-} catch {}
+} catch { }
 
 // Connect to Discord
-client.connect();
+bot.start();
 
 async function handleMessage(original_message: Message) {
-  if (original_message.author.id === client.user?.id) {
+  if (original_message.author.id === bot.id) {
     return;
   }
 
@@ -65,23 +71,11 @@ async function handleMessage(original_message: Message) {
     return;
   }
 
-  const current_channel = original_message.channel
-  if (current_channel == null) return;
-
-  const status_message_promise = current_channel.createMessage({
+  const status_message_promise = bot.helpers.sendMessage(original_message.channelId, {
     content: `⏳ Extracting content from ${task.type}...`,
-    messageReference: { messageID: original_message.id },
+    messageReference: { messageId: original_message.id, failIfNotExists: true },
     allowedMentions: { repliedUser: false }
   })
-
-  let remove_embeds_promise = undefined;
-  if (task.type !== "YouTube") {
-    try {
-      remove_embeds_promise = current_channel.editMessage(original_message.id, { flags: MessageFlags.SUPPRESS_EMBEDS })
-    } catch (error) {
-      console.warn(`Bot has no rights to edit message flags in server "${original_message.guild?.name}"`);
-    }
-  }
 
   const status_message = await status_message_promise;
 
@@ -93,36 +87,53 @@ async function handleMessage(original_message: Message) {
     return;
   }
 
-  if (remove_embeds_promise !== undefined) {
-    await remove_embeds_promise;
+  if (task.type === "TikTok" || items.length > 1) {
+    await updateStatus(`⏳ Generating slideshow video...`);
+    const content = await createSlideshowVideo(items);
+
+    await updateStatus(`⏳ Uploading video to Discord...`);
+    await bot.helpers.editMessage(status_message.channelId, status_message.id, {
+      content: "✅ Success",
+      files: [{ blob: content, name: "slideshow.mp4" }],
+      allowedMentions: { repliedUser: false }
+    });
+
+    try {
+      await bot.helpers.editMessage(original_message.channelId, original_message.id, {
+        flags: MessageFlags.SuppressEmbeds
+      })
+    } catch { }
+
+    return;
   }
 
   await updateStatus(`⏳ Processing content...`);
 
-  const attachments: Array<File> = [];
+  const files: Array<FileContent> = [];
   for (const item of items) {
+    if (item.variants[0] == null) throw new Error("unreachable");
 
-    if (item.size >= 100 * 1024 * 1024) {
+    if (item.variants[0]?.content_length >= 100 * 1024 * 1024) {
       if (task.type === "YouTube") {
-        await status_message.delete("Task canceled.");
+        await bot.helpers.deleteMessage(status_message.channelId, status_message.id, "Task canceled.");
         return;
       }
       await updateStatus("⚠️ Error: File size is too big.");
       return;
     }
-    
-    if (item.type !== "Video" && item.size > 25 * 1024 * 1024) {
+
+    if (item.type !== "video" && item.variants[0]?.content_length > 25 * 1024 * 1024) {
       await updateStatus("⚠️ Error: An image or a song exceeds Discord upload limits.");
       return;
     }
 
-    if (item.type === "Video" && item.size > 25 * 1024 * 1024) {
-      const video = await (await fetch(item.url)).arrayBuffer();
+    if (item.type === "video" && item.variants[0]?.content_length > 25 * 1024 * 1024) {
+      const video = await (await fetch(item.variants[0].href)).blob();
       await updateStatus(`⏳ Compressing video...`);
       try {
         const compressedVideo = await compressVideo(video);
-        if (compressedVideo.byteLength <= 25 * 1024 * 1024) {
-          attachments.push({ contents: compressedVideo, name: "video.mp4" });
+        if (compressedVideo.size <= 25 * 1024 * 1024) {
+          files.push({ blob: compressedVideo, name: "video.mp4" });
           continue;
         }
         await updateStatus("⚠️ Error: Video file exceeds Discord upload limits, even after compression.");
@@ -133,37 +144,45 @@ async function handleMessage(original_message: Message) {
     }
 
     // TODO: find a way to detect a proper filetype
-    const file = await (await fetch(item.url)).arrayBuffer();
+    const file = await (await fetch(item.variants[0].href)).blob();
     switch (item.type) {
-      case "Video": {
-        attachments.push({ contents: Buffer.from(file), name: "video.mp4" });
+      case "video": {
+        files.push({ blob: file, name: "video.mp4" });
         break;
       }
-      case "Image": {
-        attachments.push({ contents: Buffer.from(file), name: "image.png" });
+      case "image": {
+        files.push({ blob: file, name: "image.png" });
         break;
       }
-      case "Audio": {
-        attachments.push({ contents: Buffer.from(file), name: "music.mp3" });
+      case "audio": {
+        files.push({ blob: file, name: "music.mp3" });
         break;
       }
     }
   }
   await updateStatus(`⏳ Uploading content to Discord...`);
-  await status_message.edit({
+
+  await bot.helpers.editMessage(status_message.channelId, status_message.id, {
     content: "✅ Success",
-    files: attachments,
+    files: files,
     allowedMentions: { repliedUser: false }
   });
 
-  return;
-  async function updateStatus(text: string) {
-    await status_message.edit({
-      content: text,
-      allowedMentions: { repliedUser: false }
-    })
+  if (task.type !== "YouTube") {
+    try {
+      await bot.helpers.editMessage(original_message.channelId, original_message.id, {
+        flags: MessageFlags.SuppressEmbeds
+      })
+    } catch { }
   }
 
+  return;
+  async function updateStatus(text: string) {
+    await bot.helpers.editMessage(status_message.channelId, status_message.id, {
+      content: text,
+      allowedMentions: { repliedUser: false }
+    });
+  }
 }
 
 async function getContent(task: Task) {

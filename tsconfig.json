@@ -5,8 +5,6 @@
       "allowUmdGlobalAccess": false,
       "allowUnreachableCode": false,
       "allowUnusedLabels": false,
-      "exactOptionalPropertyTypes": true,
-      "incremental": true,
       "module": "NodeNext",
       "moduleResolution": "NodeNext",
       "noFallthroughCasesInSwitch": true,
@@ -28,6 +26,9 @@
       "strict": true,
       "alwaysStrict": true,
       "target": "ESNext",
-      "lib": ["ESNext"]
+      "lib": ["ESNext"],
+      // why?
+      "exactOptionalPropertyTypes": false,
+      "incremental": false
   }
 }

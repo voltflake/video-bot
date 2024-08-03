@@ -3,8 +3,11 @@
   "module": "build/index.js",
   "type": "module",
   "dependencies": {
-    "@types/node": "^22.0.0",
-    "oceanic.js": "^1.11.1",
-    "typescript": "^5.5.4"
+    "@types/node": "^22.1.0",
+    "discordeno": "^19.0.0-next.01437eb",
+    "typescript": "^5.6.0-dev.20240802"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.12"
   }
 }

@@ -47,12 +47,14 @@ async function rocketapi(url: string): Promise<Array<Item>> {
         switch (item.media_type) {
           case 1: {
             const image_url = item.image_versions2.candidates[0].url;
-            result.push({ type: "Image", url: image_url, size: await validateAndGetContentLength(image_url) });
+            const image_info = await validateAndGetContentLength(image_url);
+            result.push({ type: "image", variants: [{href: image_url, content_length: image_info.content_length }]});
             continue;
           }
           case 2: {
             const video_url = item.video_versions[0].url;
-            result.push({ type: "Image", url: video_url, size: await validateAndGetContentLength(video_url) });
+            const video_info = await validateAndGetContentLength(video_url);
+            result.push({ type: "video", variants: [{href: video_url, content_length: video_info.content_length }]});
             continue;
           }
           default: {
@@ -65,11 +67,13 @@ async function rocketapi(url: string): Promise<Array<Item>> {
     }
     case "feed": {
       const image_url = info.image_versions2.candidates[0].url;
-      return [{ type: "Image", url: image_url, size: await validateAndGetContentLength(image_url) }];
+      const image_info = await validateAndGetContentLength(image_url);
+      return [{ type: "image", variants: [{href: image_url, content_length: image_info.content_length }]}];
     }
     case "clips": {
       const video_url = info.video_versions[0].url;
-      return [{ type: "Image", url: video_url, size: await validateAndGetContentLength(video_url) }];
+      const video_info = await validateAndGetContentLength(video_url);
+      return [{ type: "video", variants: [{href: video_url, content_length: video_info.content_length }]}];
     }
     default: {
       throw new Error("Unknown product type in Instagram link.");

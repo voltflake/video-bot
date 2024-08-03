@@ -4,14 +4,14 @@ export async function extractTiktokContent(url: string) {
   return scraperapi(url);
 }
 
-async function scraperapi(tiktokUrl: string): Promise<Array<Item>> {
+async function scraperapi(url: string): Promise<Array<Item>> {
   const key = process.env["RAPIDAPI_KEY"];
   if (key == null) {
     throw new Error("RapidAPI key is not provided. Check bot configuration.");
   }
 
   const urlParams = {
-    url: tiktokUrl,
+    url: url,
     hd: "1"
   };
   const urlParamsStr = new URLSearchParams(urlParams).toString();
@@ -39,14 +39,41 @@ async function scraperapi(tiktokUrl: string): Promise<Array<Item>> {
     throw new Error(`API returned an error. Bad link or a live video was provided. ${json.code}`);
   }
 
+  // default video
   if (json.data.images == null) {
-    // default video
-    return [{url: json.data.play, size: json.data.size, type: "Video"}];
+    const variants = [];
+    try {
+      const video_info = await validateAndGetContentLength(json.data.play);
+      variants.push({
+        href: json.data.play,
+        content_length: video_info.content_length,
+        file_extention: video_info.file_extention
+      });
+    } catch { }
+
+    try {
+      const video_info = await validateAndGetContentLength(json.data.wmplay);
+      variants.push({
+        href: json.data.wmplay,
+        content_length: video_info.content_length,
+        file_extention: video_info.file_extention
+      });
+    } catch { }
+
+    try {
+      const video_info = await validateAndGetContentLength(json.data.hdplay);
+      variants.push({
+        href: json.data.hdplay,
+        content_length: video_info.content_length,
+        file_extention: video_info.file_extention
+      });
+    } catch { }
+
+    return [{ type: "video", variants: variants }];
   }
 
+  // it's a slideshow
   if (json.data.images.length > 0) {
-    // it's a slideshow
-    
     // discord supports up to 10 attachments per message
     // (9 images + sound) max
     if (json.data.images.length > 9) {
@@ -54,11 +81,22 @@ async function scraperapi(tiktokUrl: string): Promise<Array<Item>> {
     }
 
     const result = [];
-    for (const image of json.data.images) {
-      const item: Item = {url: image, type: "Image", size: await validateAndGetContentLength(image)}
+    for (const url of json.data.images) {
+      const image_info = await validateAndGetContentLength(url);
+      const item: Item = {
+        type: "image",
+        variants: [{
+          href: url,
+          content_length: image_info.content_length,
+          file_extention: image_info.file_extention,
+          width: image_info.image_width,
+          height: image_info.image_height
+        }]
+      }
       result.push(item);
     }
-    const item: Item = {url: json.data.music, type: "Audio", size: await validateAndGetContentLength(json.data.music)}
+    const audio_info = await validateAndGetContentLength(json.data.music);
+    const item: Item = { type: "audio", variants: [{ href: json.data.music, content_length: audio_info.content_length, file_extention: audio_info.file_extention }], }
     result.push(item);
     return result;
   }
