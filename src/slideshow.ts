@@ -10,15 +10,15 @@ export async function createSlideshowVideo(items: Array<Item>) {
     let audio_filename: string = "";
     for (let i = 0; i < items.length; i++) {
         const item = items[i];
-        if (item == null) throw new Error("unreachable");
-        if (item.variants[0] == null) throw new Error("unreachable");
+        if (!item) throw new Error("unreachable");
+        if (!item.variants[0]) throw new Error("unreachable");
         const data = await (await fetch(item.variants[0].href)).arrayBuffer();
-        if (item.type == "image") {
+        if (item.type === "image") {
             image_count += 1;
             image_filenames.push(`./videos/${timestamp}-image${i}.${item.variants[0].file_extention}`);
             await writeFile(`./videos/${timestamp}-image${i}.${item.variants[0].file_extention}`, Buffer.from(data));
         }
-        if (item.type == "audio") {
+        if (item.type === "audio") {
             audio_filename = `./videos/${timestamp}-audio.mp3`;
             await writeFile(audio_filename, Buffer.from(data));
         }
@@ -28,22 +28,21 @@ export async function createSlideshowVideo(items: Array<Item>) {
     const image_resolutions: Array<{ width: number; height: number }> = [];
     for (let i = 0; i < image_count; i++) {
         const element = image_filenames[i];
-        if (element == null) throw new Error("unreachable");
+        if (!element) throw new Error("unreachable");
         await new Promise<void>((resolve) => {
             execFile("magick",
                 ["identify", element],
                 { encoding: "utf-8", shell: true },
                 (error, stdout, stderr) => {
-                    if (error == null) {
-                        const match = stdout.match(/(?<width>\d+)x(?<height>\d+)/);
-                        if (match == null) throw new Error("unreachable");
-                        if (match.groups == null) throw new Error("unreachable");
-                        image_resolutions.push({ width: Number.parseInt(match.groups["width"]!), height: Number.parseInt(match.groups["height"]!) });
-                        resolve();
-                        return;
+                    if (error) {
+                        console.error(stdout, stderr);
+                        throw new Error("execFile failed (magick identify)");
                     }
-                    console.log(stdout, stderr);
-                    throw new Error("execFile failed (ffmpeg scaling images)");
+                    const match = stdout.match(/(?<width>\d+)x(?<height>\d+)/);
+                    if (!match) throw new Error("unreachable");
+                    if (!match.groups) throw new Error("unreachable");
+                    image_resolutions.push({ width: Number.parseInt(match.groups["width"]!), height: Number.parseInt(match.groups["height"]!) });
+                    resolve();
                 }
             );
         });
@@ -54,10 +53,10 @@ export async function createSlideshowVideo(items: Array<Item>) {
     let max_aspect_ratio = 3;
     for (let i = 0; i < image_count; i++) {
         const item = items[i];
-        if (item == null) throw new Error("unreachable");
+        if (!item) throw new Error("unreachable");
         if (item.type !== "image") continue;
         const resolution = image_resolutions[i];
-        if (resolution == null) throw new Error("unreachable");
+        if (!resolution) throw new Error("unreachable");
 
         if (resolution.height > max_height) max_height = resolution.height;
         const aspect_ratio = resolution.width / resolution.height;
@@ -72,7 +71,7 @@ export async function createSlideshowVideo(items: Array<Item>) {
     const scaled_image_filenames: Array<string> = [];
     for (let i = 0; i < image_count; i++) {
         const image_filename = image_filenames[i];
-        if (image_filename == null) throw new Error("unreachable");
+        if (!image_filename) throw new Error("unreachable");
         const output_image_filename = `./videos/${timestamp}-image${i}-scaled.png`
         // magick convert image1.jpg -resize "1080x1350" -background black -gravity center -extent 1080x1350 output_image2.jpg
         await new Promise<void>((resolve) => {
@@ -80,12 +79,11 @@ export async function createSlideshowVideo(items: Array<Item>) {
                 ["convert", image_filename, "-resize", `"${selected_width}x${max_height}"`, "-background", "black", "-gravity", "center", "-extent", `${selected_width}x${max_height}`, output_image_filename],
                 { encoding: "utf-8", shell: true },
                 (error, stdout, stderr) => {
-                    if (error == null) {
-                        resolve();
-                        return;
+                    if (error) {
+                        console.error(stdout, stderr);
+                        throw new Error("execFile failed (magick convert)");
                     }
-                    console.log(stdout, stderr);
-                    throw new Error("execFile failed (ffmpeg scaling images)");
+                    resolve();
                 }
             );
         });
@@ -109,12 +107,12 @@ export async function createSlideshowVideo(items: Array<Item>) {
             execFile("ffmpeg", ffmpeg_args.split(" "),
                 { encoding: "utf-8", shell: true },
                 (error, stdout, stderr) => {
-                    if (error == null) {
-                        resolve();
-                        return;
+                    if (error) {
+                        console.error("ffmpeg " + ffmpeg_args);
+                        console.error(stdout, stderr);
+                        throw new Error("execFile failed (ffmpeg creating loop video)");
                     }
-                    console.log(stdout, stderr);
-                    throw new Error("execFile failed (ffmpeg creating loop video)");
+                    resolve();
                 })
         });
     } else {
@@ -127,7 +125,7 @@ export async function createSlideshowVideo(items: Array<Item>) {
         let current_filter_result = 0;
         let current_second_input = 1;
         ffmpeg_command = ffmpeg_command.concat(`[0][1]xfade=transition=slideleft:duration=${transition_duration.toFixed(1)}:offset=${slide_duration.toFixed(1)}[m0];`);
-        for (let i = 2; i < image_count+1; i++) {
+        for (let i = 2; i < image_count + 1; i++) {
             const first_input = current_filter_result;
             const second_input = (current_second_input + 1 < image_count) ? current_second_input + 1 : 0;
             const output = current_filter_result + 1;
@@ -141,24 +139,28 @@ export async function createSlideshowVideo(items: Array<Item>) {
             execFile("ffmpeg", ffmpeg_command.split(" ").slice(1),
                 { encoding: "utf-8", shell: true },
                 (error, stdout, stderr) => {
-                    if (error == null) {
-                        resolve();
-                        return;
+                    if (error) {
+                        console.error(ffmpeg_command);
+                        console.error(stdout, stderr);
+                        throw new Error("execFile failed (ffmpeg creating loop video)");
                     }
-                    console.log(stdout, stderr);
-                    throw new Error("execFile failed (ffmpeg creating loop video)");
+                    resolve();
                 })
         });
     }
 
     // create final video with music
     const ffmpeg_command2 = `ffmpeg -hide_banner -stream_loop -1 -i videos/${timestamp}-slideshow_loop.mp4 -i ${audio_filename} -shortest -c copy -pix_fmt yuv420p -movflags +faststart videos/${timestamp}-output-swipe.mp4`;
-    await new Promise((resolve) => {
+    await new Promise<void>((resolve) => {
         execFile("ffmpeg", ffmpeg_command2.split(" ").slice(1),
             { encoding: "utf-8", shell: true },
             (error, stdout, stderr) => {
-                if (error == null) resolve(stdout + stderr);
-                else throw new Error("execFile failed (ffmpeg creating final slideshow)");
+                if (error) {
+                    console.error(ffmpeg_command2);
+                    console.error(stdout, stderr);
+                    throw new Error("execFile failed (ffmpeg creating final slideshow)");
+                }
+                resolve();
             });
     });
 
