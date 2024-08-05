@@ -2,7 +2,18 @@ import { type Item } from "./util.js";
 import { readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { execFile } from 'node:child_process';
 
+// WARNING: h264_v4l2m2m encoder on rpi4 can fail on bigger resolutions
+// 756x1344 is maximum for 9:16 aspect ratio (4096 16pixel blocks) for 60fps
+// or 1080p@30 max
+
+// WARNING: libx264 doesn't encode resolutions that are not divisible by 2
+
 export async function createSlideshowVideo(items: Array<Item>) {
+    let codec = "libx264";
+    if (process.env["CODEC"] != null) {
+        codec = process.env["CODEC"];
+    }
+
     // download all required assets
     const timestamp = Date.now()
     const image_filenames: Array<string> = [];
@@ -63,9 +74,14 @@ export async function createSlideshowVideo(items: Array<Item>) {
         if (aspect_ratio < max_aspect_ratio) max_aspect_ratio = aspect_ratio;
     }
     if (max_aspect_ratio < 0.5625) max_aspect_ratio = 0.5625;
-    if (max_height % 2 === 1) max_height -= 1;
+
+    if (max_height > 1920) max_height = 1920;
     let selected_width = max_height * max_aspect_ratio;
-    if (selected_width % 2 === 1) selected_width -= 1;
+
+    if (codec === "libx264") {
+        if (selected_width % 2 === 1) selected_width -= 1;
+        if (max_height % 2 === 1) max_height -= 1;
+    }
 
     // scale each image
     const scaled_image_filenames: Array<string> = [];
@@ -91,10 +107,6 @@ export async function createSlideshowVideo(items: Array<Item>) {
     }
 
     // generate looped slideshow for future final video
-    let codec = "h264";
-    if (process.env["CODEC"] != null) {
-        codec = process.env["CODEC"];
-    }
 
     // both sould be divisible by 0.1
     const transition_duration = 0.5;
@@ -151,7 +163,7 @@ export async function createSlideshowVideo(items: Array<Item>) {
     }
 
     // create final video with music
-    const ffmpeg_command2 = `ffmpeg -hide_banner -stream_loop -1 -i videos/${timestamp}-slideshow_loop.mp4 -i ${audio_filename} -shortest -c copy -pix_fmt yuv420p -movflags +faststart videos/${timestamp}-output-swipe.mp4`;
+    const ffmpeg_command2 = `ffmpeg -hide_banner -stream_loop -1 -i videos/${timestamp}-slideshow_loop.mp4 -i ${audio_filename} -shortest -c:v copy -c:a aac -pix_fmt yuv420p -movflags +faststart videos/${timestamp}-output-swipe.mp4`;
     await new Promise<void>((resolve) => {
         execFile("ffmpeg", ffmpeg_command2.split(" ").slice(1),
             { encoding: "utf-8", shell: true },

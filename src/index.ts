@@ -1,13 +1,16 @@
 import { createInterface } from "node:readline/promises";
-import { access, mkdir, unlink } from "node:fs/promises";
+import { access, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { createBot, FileContent, Intents, MessageFlags, type Message } from "discordeno";
 import { compressVideo } from "./video_compression.js";
 import type { Task, Item } from "./util.js";
 import { extractInstagramContent } from "./instagram.js";
 import { extractTiktokContent } from "./tiktok.js";
 import { extractYoutubeContent } from "./youtube.js";
+import { convertToProperCodec, getAudioData } from "./voice_message.js";
 import { createSlideshowVideo } from "./slideshow.js";
 import 'dotenv/config'
+
+const tiktok_slideshows_use_video = true;
 
 const rl = createInterface({ input: process.stdin, output: process.stdout });
 
@@ -22,7 +25,7 @@ const bot = createBot({
   desiredProperties: {
     message: { author: true, channelId: true, attachments: true, id: true, guildId: true, content: true },
     user: { id: true, username: true, discriminator: true },
-    attachment: { url: true, proxyUrl: true, id: true, filename: true, size: true }
+    attachment: { url: true, proxyUrl: true, id: true, filename: true, size: true, waveform: true, duration_secs: true }
   }
 });
 
@@ -67,18 +70,20 @@ async function handleMessage(original_message: Message) {
     return;
   }
 
+  if (!original_message.content) {
+    return;
+  }
+
   const task = SearchForTask(original_message.content);
   if (task === null) {
     return;
   }
 
-  const status_message_promise = bot.helpers.sendMessage(original_message.channelId, {
+  const status_message = await bot.helpers.sendMessage(original_message.channelId, {
     content: `⏳ Extracting content from ${task.type}...`,
     messageReference: { messageId: original_message.id, failIfNotExists: true },
     allowedMentions: { repliedUser: false }
   })
-
-  const status_message = await status_message_promise;
 
   let items: Array<Item>;
   try {
@@ -89,16 +94,49 @@ async function handleMessage(original_message: Message) {
   }
 
   if (task.type === "TikTok" || items.length > 1) {
-    await updateStatus(`⏳ Generating slideshow video...`);
-    const content = await createSlideshowVideo(items);
-
-    await updateStatus(`⏳ Uploading video to Discord...`);
-    await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-      content: "✅ Success",
-      files: [{ blob: content, name: "slideshow.mp4" }],
-      allowedMentions: { repliedUser: false }
-    });
-
+    await updateStatus(`⏳ Processing TikTok slideshow...`);
+    if (!tiktok_slideshows_use_video) {
+      const audio_item = items.find((item) => {
+        return item.type === "audio";
+      })
+      if (!audio_item) throw new Error("unreachable");
+      if (!audio_item.variants[0]) throw new Error("unreachable");
+      const audio = await (await fetch(audio_item.variants[0].href)).arrayBuffer();
+      const timestamp = Date.now()
+      await writeFile(`videos/${timestamp}-tiktokaudio.mp4`, Buffer.from(audio))
+      const ogg_filename = await convertToProperCodec(`videos/${timestamp}-tiktokaudio.mp4`);
+      const { duration, waveform } = await getAudioData(ogg_filename);
+      let image_count = 0;
+      const image_blobs = [];
+      for (const item of items) {
+        if (image_count === 10) break;
+        if (item.type !== "image") continue;
+        if (!item.variants[0]) throw new Error("unreachable");
+        const image = await (await fetch(item.variants[0].href)).blob();
+        image_blobs.push(image);
+        image_count += 1;
+      }
+      const filecontent_arr: FileContent[] = [];
+      for (const [i, blob] of image_blobs.entries()) {
+        filecontent_arr.push({ blob: blob, name: `image${i + 1}.png` })
+      }
+      await bot.helpers.editMessage(status_message.channelId, status_message.id, {
+        content: "✅ Success",
+        files: filecontent_arr,
+        allowedMentions: { repliedUser: false }
+      });
+      await sendVoiceMessage(status_message.channelId, ogg_filename, waveform, duration);
+    } else {
+      const content = await createSlideshowVideo(items);
+      await updateStatus(`⏳ Uploading video to Discord...`);
+      await bot.helpers.editMessage(status_message.channelId, status_message.id, {
+        content: "✅ Success",
+        files: [{ blob: content, name: "slideshow.mp4" }],
+        allowedMentions: { repliedUser: false }
+      });
+  
+  
+    }
     try {
       await bot.helpers.editMessage(original_message.channelId, original_message.id, {
         flags: MessageFlags.SuppressEmbeds
@@ -186,8 +224,45 @@ async function handleMessage(original_message: Message) {
   }
 }
 
+// NOTE: temporary workaround until discordeno properly supports voice messages
+async function sendVoiceMessage(channel_id: bigint, path_to_audio_file: string, waveform: Uint8Array, duration: number) {
+  const data = await readFile(path_to_audio_file)
+  const form = new FormData();
+  form.append("files[0]", new Blob([data], { type: "audio/ogg" }), "song.ogg");
+
+  const payloadJson = {
+    attachments: [
+      {
+        id: "0",
+        filename: "song.ogg",
+        duration_secs: duration,
+        waveform: Buffer.from(waveform).toString("base64")
+      },
+    ],
+    flags: 1 << 13, // IS_VOICE_MESSAGE
+  };
+
+  form.append("payload_json", JSON.stringify(payloadJson));
+
+  try {
+    // Send voice message
+    const response = await fetch(`https://discord.com/api/v10/channels/${channel_id}/messages`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bot ${process.env["DISCORD_TOKEN"]}`
+      },
+      body: form,
+    });
+    if (!response.ok) throw new Error("failed to send voice message");
+  } catch (error: any) {
+    console.error(
+      "Error sending voice message:",
+      error.response ? error.response.data : error.message
+    );
+  }
+}
+
 async function getContent(task: Task) {
-  // TODO add redundant (backup) modules in case first one fails
   switch (task.type) {
     case "YouTube Short":
     case "YouTube": {
