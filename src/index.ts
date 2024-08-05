@@ -93,7 +93,7 @@ async function handleMessage(original_message: Message) {
     return;
   }
 
-  if (task.type === "TikTok" || items.length > 1) {
+  if (task.type === "TikTok" && items.length > 1) {
     await updateStatus(`⏳ Processing TikTok slideshow...`);
     if (!tiktok_slideshows_use_video) {
       const audio_item = items.find((item) => {
