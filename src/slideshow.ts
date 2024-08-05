@@ -114,7 +114,7 @@ export async function createSlideshowVideo(items: Array<Item>) {
 
     const loop_duration = Math.ceil((slide_duration + transition_duration) * image_count * 60);
     if (image_count === 1) {
-        const ffmpeg_args = `-loop 1 -framerate 60 -i ${scaled_image_filenames[0]} -c:v ${codec} -pix_fmt yuv420p -framerate 60 -frames ${loop_duration} videos/${timestamp}-slideshow_loop.mp4`;
+        const ffmpeg_args = `-loop 1 -framerate 60 -i ${scaled_image_filenames[0]} -c:v ${codec} -pix_fmt yuv420p -r 60 -frames ${loop_duration} videos/${timestamp}-slideshow_loop.mp4`;
         await new Promise<void>((resolve) => {
             execFile("ffmpeg", ffmpeg_args.split(" "),
                 { encoding: "utf-8", shell: true },
@@ -146,7 +146,7 @@ export async function createSlideshowVideo(items: Array<Item>) {
             current_second_input = second_input;
         }
         ffmpeg_command = ffmpeg_command.slice(0, -1);
-        ffmpeg_command = ffmpeg_command.concat(`" -map "[m${current_filter_result}]" -c:v ${codec} -pix_fmt yuv420p -r 30 -frames ${loop_duration} videos/${timestamp}-slideshow_loop.mp4`);
+        ffmpeg_command = ffmpeg_command.concat(`" -map "[m${current_filter_result}]" -c:v ${codec} -pix_fmt yuv420p -r 60 -frames ${loop_duration} videos/${timestamp}-slideshow_loop.mp4`);
 
         await new Promise<void>((resolve) => {
             execFile("ffmpeg", ffmpeg_command.split(" ").slice(1),
@@ -163,7 +163,7 @@ export async function createSlideshowVideo(items: Array<Item>) {
     }
 
     // create final video with music
-    const ffmpeg_command2 = `ffmpeg -hide_banner -stream_loop -1 -i videos/${timestamp}-slideshow_loop.mp4 -i ${audio_filename} -shortest -c:v copy -c:a aac -pix_fmt yuv420p -movflags +faststart -r 30 videos/${timestamp}-output-swipe.mp4`;
+    const ffmpeg_command2 = `ffmpeg -hide_banner -stream_loop -1 -i videos/${timestamp}-slideshow_loop.mp4 -i ${audio_filename} -shortest -c:v copy -c:a aac -pix_fmt yuv420p -movflags +faststart videos/${timestamp}-output-swipe.mp4`;
     await new Promise<void>((resolve) => {
         execFile("ffmpeg", ffmpeg_command2.split(" ").slice(1),
             { encoding: "utf-8", shell: true },
