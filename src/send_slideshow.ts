@@ -4,9 +4,9 @@ import { writeFile } from "fs/promises";
 import { convertToProperCodec, getAudioData, sendVoiceMessage } from "./voice_message.js";
 import { createSlideshowVideo } from "./slideshow_video.js";
 
-export async function sendTiktokSlideshow(items: Array<Item>, bot: Bot, status_message: Message) {
+export async function sendSlideshow(items: Array<Item>, bot: Bot, status_message: Message) {
   await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-    content: `⏳ Processing TikTok slideshow...`,
+    content: `⏳ Processing slideshow slideshow...`,
     allowedMentions: { repliedUser: false }
   });
   const audio_item = items.find((item) => {
@@ -35,7 +35,7 @@ export async function sendTiktokSlideshow(items: Array<Item>, bot: Bot, status_m
   }
 
   await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-    content: `⏳ Generating TikTok video...`,
+    content: `⏳ Generating slideshow video...`,
     files: filecontent_arr,
     allowedMentions: { repliedUser: false }
   });

@@ -7,7 +7,7 @@ import { extractInstagramContent } from "./instagram.js";
 import { extractTiktokContent } from "./tiktok.js";
 import { extractYoutubeContent } from "./youtube.js";
 import { sendSingleVideo } from "./send_single_video.js";
-import { sendTiktokSlideshow } from "./send_tiktok_slideshow.js";
+import { sendSlideshow } from "./send_slideshow.js";
 import 'dotenv/config'
 
 const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -93,9 +93,9 @@ async function handleMessage(original_message: Message) {
 
   if (!items[0]) throw new Error("unreachable");
 
-  if (task.type === "TikTok" && items.length > 1) {
-    // tiktok slideshow
-    await sendTiktokSlideshow(items, bot, status_message);
+  if (items.find((item)=>item.type === "audio")) {
+    // slideshow
+    await sendSlideshow(items, bot, status_message);
   } else if (items.length === 1 && items[0].type === "video") {
     // single video case
     await sendSingleVideo(items[0], bot, status_message);

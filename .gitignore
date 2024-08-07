@@ -5,6 +5,8 @@
 /example_responses
 /.vscode
 
+/*.json
+
 .env
 start.sh
 biome.json

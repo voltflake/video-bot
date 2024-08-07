@@ -63,12 +63,24 @@ async function rocketapi(url: string): Promise<Array<Item>> {
           }
         }
       }
+      if (info.music_metadata.music_info) {
+        const audio_url = info.music_metadata.music_info.music_asset_info.progressive_download_url
+        const audio_info = await validateAndGetContentLength(audio_url);
+        result.push({ type: "audio", variants: [{href: audio_url, content_length: audio_info.content_length }]});
+      }
       return result;
     }
     case "feed": {
+      const result: Array<Item> = [];
       const image_url = info.image_versions2.candidates[0].url;
       const image_info = await validateAndGetContentLength(image_url);
-      return [{ type: "image", variants: [{href: image_url, content_length: image_info.content_length }]}];
+      result.push({ type: "image", variants: [{href: image_url, content_length: image_info.content_length }]});
+      if (info.music_metadata.music_info) {
+        const audio_url = info.music_metadata.music_info.music_asset_info.progressive_download_url
+        const audio_info = await validateAndGetContentLength(audio_url);
+        result.push({ type: "audio", variants: [{href: audio_url, content_length: audio_info.content_length }]});
+      }
+      return result;
     }
     case "clips": {
       const video_url = info.video_versions[0].url;
