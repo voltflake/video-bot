@@ -76,7 +76,7 @@ export async function createSlideshowVideo(items: Array<Item>) {
     if (max_aspect_ratio < 0.5625) max_aspect_ratio = 0.5625;
 
     if (max_height > 1920) max_height = 1920;
-    let selected_width = max_height * max_aspect_ratio;
+    let selected_width = Math.floor(max_height * max_aspect_ratio);
 
     if (codec === "libx264") {
         if (selected_width % 2 === 1) selected_width -= 1;
