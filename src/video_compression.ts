@@ -56,8 +56,8 @@ export async function compressVideo(data: Blob) {
 
   // Uncomment this section to remove temporary files after compression.
   // Commented out for debuging purposes.
-  // await unlink(filename);
-  // await unlink(filename_compressed);
+  await unlink(filename);
+  await unlink(filename_compressed);
 
   // some telemetry to help pick better compression settings for each codec in future
   const cbr_bitrate_error_percentage = compressed_info.video_bitrate / (required_video_bitrate * 0.01) - 100;
