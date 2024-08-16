@@ -1,115 +1,74 @@
-# Open-Source Discord Bot that replies to links with content 
-### This README.md is outdated. It will be changed soon.  
-<img src="https://github.com/voltflake/video-bot/assets/51025847/58af9ec4-6f29-4568-9aab-cf6d414da999" width="32%"/>  
-<img src="https://github.com/voltflake/video-bot/assets/51025847/c34980ee-a069-48fc-97de-78530b311d4e" width="32%"/>  
-<img src="https://github.com/voltflake/video-bot/assets/51025847/22298993-7fb8-4113-8581-784fad4329c9" width="32%"/>  
+# Video Bot by voltfalke
+❤️ Open source Discord bot that replies with content to messages containig recognised links  
+✔️ Currently works with links from **TikTok**, **YouTube** and **Instagram**  
+🤝 Feel free to sumbit an issue if you encountered a problem or need some help. Feedback is appriciated!  
 
-### Currently works fine with Instagram✅ / TikTok✅ / Youtube✅  
-🤝 If you encountered a problem or want some help feel free to sumbit an issue. Feedback is appriciated!  
-### 2023 September Update
-- [X] Added support for instagram posts with multiple items
-- [X] YouTube videos are now beeing sent to channel by default but only if they fit into 25MB Discord limit
-- [X] Improved processing speed when requesting multiple links in one message
-- [X] Improved logging when compressing videos
-- [X] Improved error reporting in channel
-### Features✨
-- [X] Lets everyone view the video directly in Discord
-- [X] Sends videos as reply to original message
-- [X] Supports multiple links in one message
-- [X] No TikTok watermark on videos
-- [X] Can be hosted on Raspberry Pi (read Raspberry Pi section)
-- [X] Settings wizzard is built into bot
-- [X] Also supports Instagram and YouTube links with some additional setup
-### Known issues⚠️
-- [X] Photo tiktoks may be stretched too much if different image sizes used
-- [X] When sending too many atttachments to discord at the same time, some replies may repeat (Discord.JS issue?)
-- [X] Videos which are saved onto disk to be compressed later and compression results are not automatically deleted from `/logs` for debugging and statistic purposes. Uncomment two lines with `unlink()` function in `video_compression.ts` to delete them automatically when they're no longer needed
-- [X] (Unverified) When processing multiple instagram links at the same time instagram.com may reject some requests
-- [X] Bot threats Private/Unavailable content as backend errors. (post from private Instagram profile or removed youtube video for example)
-# Installation
-1. Make sure recent version of node.js and npm is installed on your system
-2. Build bot with these commands
+## ✨ Features
+- Can be hosted on Raspberry Pi. (*read Raspberry Pi section*)
+- No TikTok watermark on videos.
+- Compresses videos when they exceed discord upload limits.
+- Generates videos with music from Instagram posts or TikTok images.
+- Shows processing status/stage.
+- Bot threats private/unavailable content as errors.  
+
+## 🔧 Installation
+> [!IMPORTANT]  
+> These dependencies are required for bot to work properly.  
+> All should be available from PATH enviroment variable.
+> - [ffmpeg and ffprobe](https://ffmpeg.org/) (required for video compression and video slideshow generation)
+> - [image magick](https://imagemagick.org/) (required for slideshow generation)
+> - [yt-dlp](https://github.com/yt-dlp/yt-dlp) (required to support YouTube shorts and videos)
+> - [Node.js](https://nodejs.org/en) (required to run the bot)
+
+1. Make sure you have all needed dependencies installed and available in PATH
+2. Download the project and navigate to project folder (where this README file is located)
+3. Install Node.js dependencies and run typescript compiler to build project.
 ```
-cd ~
-git clone https://github.com/voltflake/video-bot
-cd video-bot
-npm install
+npm i
+```
+```
 npx tsc
 ```
-3. Now you can start this bot
+4. Go to [RapidAPI.com](https://rapidapi.com). Log in and subscribe to [RocketAPI](https://rapidapi.com/rocketapi/api/rocketapi-for-instagram) and [Tiktok Scraper](https://rapidapi.com/tikwm-tikwm-default/api/tiktok-scraper7). Save your key for authentification.
+5. Rename `example.env` to `.env` and open it in text editor. Fill in required enviroment variables.
+```
+DISCORD_TOKEN - required, token to authenticate yout bot.
+RAPIDAPI_KEY - required, key to your RapidAPI application.
+```
+> [!NOTE]  
+> You can also specify additional variables if you need them.
+> ```
+> CODEC - optional, codec that ffmpeg should use when compressing/creating videos.
+> ```
+3. Now you should be able to start this bot.
 ```
 node .
 ```
-# Getting Raspberry Pi to work
-Required to run
----
-Instalation should be pretty straighfoward.  
-Download [Node Version Manager](https://github.com/nvm-sh/nvm#install--update-script)  
-Install Node with nvm (v18.16.1 should work fine on raspbian buster, newer may fail)  
-```
-nvm install --lts node
-```
-Follow above instalation instructions
-  
-Support Instagram links
----
-Install python3 and python3-pip  
-```
-sudo apt install python3 python3-pip
-```
-Install gallery-dl python package
-```
-pip3 install gallery-dl
-```
-Update PATH variable if you get a warning that script is not in PATH
-```
-PATH=$PATH:/home/pi/.local/bin
-```
-Log into instagram.com from your browser and exctract cookies.txt from it.  
-Place cookies.txt into video-bot folder and Instagram feature should work fine.  
+## 🥧 Hosting on Raspberry Pi or similar SBC
+### Support for hardware accelerated video compression on RPI3 and RPI4
+You have two choices here.  
+1. Use Latest 32 or 64 bit Raspbian OS and specify `h264_v4l2m2m` codec for ffmpeg. (recommended)
+2. Use old 32 bit [Raspbian Buster](https://downloads.raspberrypi.org/raspios_oldstable_lite_armhf/images/raspios_oldstable_lite_armhf-2023-05-03/) as your OS and  specify `h264_omx` codec.
+### Getting image magick to work
+Currently raspbian repo supplies older versions of this tool. You'll need to [compile it yourself](https://www.imagemagick.org/script/install-source.php#linux) to make it work with bot.  
+Issue with old version that you can't use `magick identify` or `magick convert`. You have to do `identify` or `convert` instead. You can patch `slideshow_video.ts` to use older commands if you want, without compiling new tool.
 
-Support YouTube links
----
-Install python3 and python3-pip  
-```
-sudo apt install python3 python3-pip
-```
-Install yt-dlp python package
-```
-pip3 install yt-dlp
-```
-Update PATH variable if you get a warning that script is not in PATH
-```
-PATH=$PATH:/home/pi/.local/bin
-```
-
-Support hardware accelerated video compression
----
-Make sure your OS is **Raspbian Buster** also known as **Raspbian Legacy**,  
-h264_omx hardware encoder doesn't work on newer **Raspbian Bulseye** on my 3A+ board.  
-Install ffmpeg
-```
-sudo apt install ffmpeg
-```
-
-Run bot on system startup (systemd service)
----
+## 🐧 Create a systemd service on linux to run bot at startup
 1. Create service file
 ```
 sudo nano /etc/systemd/system/video-bot.service
 ```
-2. Fill in the file (working example)
+2. Fill in the file (working example)  
+I prefer to have executable script that systemd runs, rather than specifying everything here. You can do as you want. Here's a [quickstart guide](https://linuxhandbook.com/create-systemd-services/).
 ```
 [Unit]
 Description=Discord Bot for easier video viewing
 After=network.target
 
 [Service]
-Environment=PATH=/home/pi/.local/bin:/home/pi/.nvm/versions/node/v18.16.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games
-Type=simple
-User=pi
-WorkingDirectory=/home/pi/video-bot
 ExecStart=/home/pi/video-bot/start.sh
+Type=simple
+Restart=always
 
 [Install]
 WantedBy=multi-user.target
@@ -118,18 +77,24 @@ WantedBy=multi-user.target
 ```
 sudo nano /home/pi/video-bot/start.sh
 ```
-4. Fill in the file
+4. Fill in the file  
+I added python virtual enviroment with `yt-dlp` installed there to PATH because it's not in PATH by default.
 ```
-#!/bin/sh
-node .
+#!/bin/bash
+PATH=/home/pi/venv/bin:$PATH
+cd /home/pi/video-bot
+/usr/bin/node .
 ```
 5. Make `start.sh` executable
 ```
 chmod +x /home/pi/video-bot/start.sh
 ```
-
-## Explanation of `settings.json`
-- `token` - Discord bot token to use.
-- `embeded_mode` - always send videos using URL message in Discord, may have not cleanest look but works realy fast if you have slow internet.
-- `enable_compression` - setting which enables compression for videos bigger than 8MB so they can be sent as single video file to discord, without links. If compression is disabled videos will be sent as embeded link and can expire after a week or so.
-- `codec` - specifies which video codec ffmpeg will use during compression. You can specify this as "omx_h264" on raspberry pi to use hardware accelerated encoding. By default uses "h264".
+6. Enable and start new service.
+```
+sudo systemctl daemon-reload
+```
+```
+sudo systemctl enable video-bot.service
+```
+> [!NOTE]  
+> Be careful with using distro-provided yt-dlp. If you do so make sure it's up to date. Youtube likes to break this stuff. 
