@@ -1,4 +1,4 @@
-import { validateAndGetContentLength, type Item } from "./util.js";
+import { validateAndGetContentLength, type Item } from "./util.ts";
 
 export async function extractTiktokContent(url: string) {
   return scraperapi(url);

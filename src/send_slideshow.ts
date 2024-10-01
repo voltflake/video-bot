@@ -1,8 +1,9 @@
-import { Bot, FileContent, Message, MessageFlags } from "discordeno";
-import { Item } from "./util.js";
-import { writeFile } from "fs/promises";
-import { convertToProperCodec, getAudioData, sendVoiceMessage } from "./voice_message.js";
-import { createSlideshowVideo } from "./slideshow_video.js";
+import { type Bot, type FileContent, type Message, MessageFlags } from "discordeno";
+import { writeFile } from "node:fs/promises";
+
+import { type Item } from "./util.ts";
+import { convertToProperCodec, getAudioData, sendVoiceMessage } from "./voice_message.ts";
+import { createSlideshowVideo } from "./slideshow_video.ts";
 
 export async function sendSlideshow(items: Array<Item>, bot: Bot, status_message: Message) {
   await bot.helpers.editMessage(status_message.channelId, status_message.id, {

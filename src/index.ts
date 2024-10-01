@@ -1,16 +1,13 @@
-import { createInterface } from "node:readline/promises";
 import { access, mkdir, unlink} from "node:fs/promises";
-import { createBot, FileContent, Intents, MessageFlags, type Message } from "discordeno";
-import { compressVideo } from "./video_compression.js";
-import type { Task, Item } from "./util.js";
-import { extractInstagramContent } from "./instagram.js";
-import { extractTiktokContent } from "./tiktok.js";
-import { extractYoutubeContent } from "./youtube.js";
-import { sendSingleVideo } from "./send_single_video.js";
-import { sendSlideshow } from "./send_slideshow.js";
-import 'dotenv/config'
+import { createBot, type FileContent, Intents, MessageFlags, type Message } from "@discordeno/bot";
 
-const rl = createInterface({ input: process.stdin, output: process.stdout });
+import { compressVideo } from "./video_compression.ts";
+import type { Task, Item } from "./util.ts";
+import { extractInstagramContent } from "./instagram.ts";
+import { extractTiktokContent } from "./tiktok.ts";
+import { extractYoutubeContent } from "./youtube.ts";
+import { sendSingleVideo } from "./send_single_video.ts";
+import { sendSlideshow } from "./send_slideshow.ts";
 
 if (process.env["DISCORD_TOKEN"] == null) {
   console.error("Discord token is not provided. Exiting...");
@@ -26,11 +23,6 @@ const bot = createBot({
     attachment: { url: true, proxyUrl: true, id: true, filename: true, size: true, waveform: true, duration_secs: true }
   }
 });
-
-// Listen for SIGINT on windows hosts
-if (process.platform === "win32") {
-  rl.on("SIGINT", () => process.emit("SIGINT"));
-}
 
 // Graceful shutdown
 process.on("SIGINT", async () => {

@@ -1,4 +1,4 @@
-import { validateAndGetContentLength, type Item } from "./util.js";
+import { validateAndGetContentLength, type Item } from "./util.ts";
 import { execFile } from 'node:child_process';
 
 export async function extractYoutubeContent(url: string) {

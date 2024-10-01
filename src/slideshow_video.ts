@@ -1,6 +1,7 @@
-import { type Item } from "./util.js";
 import { readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { execFile } from 'node:child_process';
+
+import { type Item } from "./util.ts";
 
 // WARNING: h264_v4l2m2m encoder on rpi4 can fail on bigger resolutions
 // 756x1344 is maximum for 9:16 aspect ratio (4096 16pixel blocks) for 60fps

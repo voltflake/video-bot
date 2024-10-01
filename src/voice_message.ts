@@ -1,4 +1,4 @@
-import { Message } from "discordeno";
+import { type Message } from "discordeno";
 import { execFile } from "node:child_process";
 import { readFile, unlink } from "node:fs/promises";
 

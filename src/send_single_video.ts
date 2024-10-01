@@ -1,6 +1,6 @@
-import { Bot, Message } from "discordeno";
-import { Item } from "./util.js";
-import { compressVideo } from "./video_compression.js";
+import type { Bot, Message } from "discordeno";
+import type { Item } from "./util.ts";
+import { compressVideo } from "./video_compression.ts";
 
 export async function sendSingleVideo(item: Item, bot: Bot, status_message: Message) {
   await bot.helpers.editMessage(status_message.channelId, status_message.id, {
