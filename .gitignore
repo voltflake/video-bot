@@ -1,12 +1,5 @@
-/node_modules
-/build
-/logs
-/videos
-/example_responses
-/.vscode
-
-/*.json
-
+node_modules
 .env
-start.sh
-biome.json
+ignore
+videos
+logs

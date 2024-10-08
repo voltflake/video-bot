@@ -1,6 +1,7 @@
-import { validateAndGetContentLength, type Item } from "./util.js";
+import process from "node:process";
+import { validateAndGetContentLength, type Item } from "./util.ts";
 
-export async function extractInstagramContent(url: string) {
+export function extractInstagramContent(url: string) {
   return rocketapi(url);
 }
 

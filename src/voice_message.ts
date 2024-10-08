@@ -1,6 +1,8 @@
-import { Message } from "discordeno";
+import type { Message } from "discordeno";
+import { Buffer } from "node:buffer";
 import { execFile } from "node:child_process";
 import { readFile, unlink } from "node:fs/promises";
+import process from "node:process";
 
 export async function convertToProperCodec(path_to_audio_file: string) {
   await new Promise<void>((resolve) => {
@@ -53,11 +55,8 @@ export async function getAudioData(path_to_audio_file: string) {
 }
 
 function volume(byte: number) {
-  if (byte >= 0x80) {
-    return (byte - 0x80) * 2;
-  } else {
-    return (0x80 - byte) * 2;
-  }
+  if (byte >= 0x80) return (byte - 0x80) * 2;
+  return (0x80 - byte) * 2;
 }
 
 // NOTE: temporary workaround until discordeno properly supports voice messages

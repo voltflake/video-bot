@@ -1,6 +1,8 @@
-import { type Item } from "./util.js";
+import type { Item } from "./util.ts";
 import { readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { execFile } from 'node:child_process';
+import { Buffer } from "node:buffer";
+import process from "node:process";
 
 // WARNING: h264_v4l2m2m encoder on rpi4 can fail on bigger resolutions
 // 756x1344 is maximum for 9:16 aspect ratio (4096 16pixel blocks) for 60fps
@@ -18,7 +20,7 @@ export async function createSlideshowVideo(items: Array<Item>) {
     const timestamp = Date.now()
     const image_filenames: Array<string> = [];
     let image_count = 0;
-    let audio_filename: string = "";
+    let audio_filename = "";
     for (let i = 0; i < items.length; i++) {
         const item = items[i];
         if (!item) throw new Error("unreachable");
@@ -52,7 +54,7 @@ export async function createSlideshowVideo(items: Array<Item>) {
                     const match = stdout.match(/(?<width>\d+)x(?<height>\d+)/);
                     if (!match) throw new Error("unreachable");
                     if (!match.groups) throw new Error("unreachable");
-                    image_resolutions.push({ width: Number.parseInt(match.groups["width"]!), height: Number.parseInt(match.groups["height"]!) });
+                    image_resolutions.push({ width: Number.parseInt(match.groups["width"]), height: Number.parseInt(match.groups["height"]) });
                     resolve();
                 }
             );
@@ -120,7 +122,7 @@ export async function createSlideshowVideo(items: Array<Item>) {
                 { encoding: "utf-8", shell: true },
                 (error, stdout, stderr) => {
                     if (error) {
-                        console.error("ffmpeg " + ffmpeg_args);
+                        console.error(`ffmpeg ${ffmpeg_args}`);
                         console.error(stdout, stderr);
                         throw new Error("execFile failed (ffmpeg creating loop video)");
                     }
@@ -182,8 +184,8 @@ export async function createSlideshowVideo(items: Array<Item>) {
     // cleanup temp files
     const files = await readdir("./videos");
     for (const file of files) {
-        if (("./videos/" + file).startsWith("./videos/" + timestamp.toFixed())) {
-            await unlink("./videos/".concat(file));
+        if ((`./videos/${file}`).startsWith(`./videos/${timestamp.toFixed()}`)) {
+            await unlink(`./videos/${file}`);
         }
     }
 

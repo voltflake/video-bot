@@ -1,6 +1,7 @@
-import { validateAndGetContentLength, type Item } from "./util.js";
+import process from "node:process";
+import { validateAndGetContentLength, type Item } from "./util.ts";
 
-export async function extractTiktokContent(url: string) {
+export function extractTiktokContent(url: string) {
   return scraperapi(url);
 }
 
@@ -49,7 +50,9 @@ async function scraperapi(url: string): Promise<Array<Item>> {
         content_length: video_info.content_length,
         file_extention: video_info.file_extention
       });
-    } catch { }
+    } catch {
+      // ignore fail and go to next variant
+    }
 
     try {
       const video_info = await validateAndGetContentLength(json.data.wmplay);
@@ -58,7 +61,9 @@ async function scraperapi(url: string): Promise<Array<Item>> {
         content_length: video_info.content_length,
         file_extention: video_info.file_extention
       });
-    } catch { }
+    } catch {
+      // ignore fail and go to next variant
+    }
 
     try {
       const video_info = await validateAndGetContentLength(json.data.hdplay);
@@ -67,7 +72,9 @@ async function scraperapi(url: string): Promise<Array<Item>> {
         content_length: video_info.content_length,
         file_extention: video_info.file_extention
       });
-    } catch { }
+    } catch {
+      // ignore fail and go to next variant
+    }
 
     return [{ type: "video", variants: variants }];
   }

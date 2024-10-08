@@ -1,12 +1,13 @@
-import { Bot, FileContent, Message, MessageFlags } from "discordeno";
-import { Item } from "./util.js";
-import { writeFile } from "fs/promises";
-import { convertToProperCodec, getAudioData, sendVoiceMessage } from "./voice_message.js";
-import { createSlideshowVideo } from "./slideshow_video.js";
+import { type Bot, type FileContent, type Message, MessageFlags } from "discordeno";
+import type { Item } from "./util.ts";
+import { writeFile } from "node:fs/promises";
+import { convertToProperCodec, getAudioData, sendVoiceMessage } from "./voice_message.ts";
+import { createSlideshowVideo } from "./slideshow_video.ts";
+import { Buffer } from "node:buffer";
 
 export async function sendSlideshow(items: Array<Item>, bot: Bot, status_message: Message) {
   await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-    content: `⏳ Processing slideshow slideshow...`,
+    content: "⏳ Processing slideshow slideshow...",
     allowedMentions: { repliedUser: false }
   });
   const audio_item = items.find((item) => {
@@ -35,7 +36,7 @@ export async function sendSlideshow(items: Array<Item>, bot: Bot, status_message
   }
 
   await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-    content: `⏳ Generating slideshow video...`,
+    content: "⏳ Generating slideshow video...",
     files: filecontent_arr,
     allowedMentions: { repliedUser: false }
   });
@@ -48,14 +49,16 @@ export async function sendSlideshow(items: Array<Item>, bot: Bot, status_message
     await bot.helpers.editMessage(status_message.channelId, status_message.referencedMessage.id, {
       flags: MessageFlags.SuppressEmbeds
     })
-  } catch { }
+  } catch {
+    // ignore error
+  }
   
-  let content;
+  let content: Blob;
   try {
     content = await createSlideshowVideo(items);
   } catch (error) {
     await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-      content: `⚠️ Error: failed to create slideshow video.`,
+      content: "⚠️ Error: failed to create slideshow video.",
       files: filecontent_arr,
       allowedMentions: { repliedUser: false }
     });

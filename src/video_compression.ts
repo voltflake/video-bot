@@ -1,5 +1,7 @@
 import { readFile, writeFile, unlink, access, constants } from "node:fs/promises";
 import { execFile } from 'node:child_process';
+import process from "node:process";
+import { Buffer } from "node:buffer";
 
 export async function compressVideo(data: Blob) {
   // locking mechanism to allow only one compression job at a time

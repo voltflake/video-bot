@@ -1,7 +1,7 @@
-import { validateAndGetContentLength, type Item } from "./util.js";
+import { validateAndGetContentLength, type Item } from "./util.ts";
 import { execFile } from 'node:child_process';
 
-export async function extractYoutubeContent(url: string) {
+export function extractYoutubeContent(url: string) {
   return ytdlp(url);
 }
 
@@ -28,7 +28,7 @@ async function ytdlp(url: string) {
     let videoSize: number;
     try {
       videoSize = (await validateAndGetContentLength(links[0])).content_length;
-    } catch (error) {
+    } catch {
       if (i === 1) {
         throw new Error("yt-dlp provided bad URLs multiple times.");
       }
