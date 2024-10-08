@@ -1,8 +1,3 @@
 {
-  "dependencies": {
-    "discordeno": "^19.0.0-next.57fa3d4"
-  },
-  "devDependencies": {
-    "@types/bun": "^1.1.10"
-  }
+  "dependencies": { "@types/bun": "^1.1.10", "discordeno": "^19.0.0-next.76ad81d" }
 }

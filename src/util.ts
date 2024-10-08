@@ -31,7 +31,7 @@ export async function validateAndGetContentLength(url: string) {
 
     if (!content_length) throw new Error("No content length provided.");
 
-    let file_extention;
+    let file_extention = undefined;
     let header_value = response.headers.get("content-type");
     if (header_value != null) {
       if (header_value.startsWith("image/")) {
@@ -44,6 +44,7 @@ export async function validateAndGetContentLength(url: string) {
         file_extention = header_value.slice("audio/".length);
       }
     }
+
 
     let image_width : number | undefined;
     let image_height : number | undefined;

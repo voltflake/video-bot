@@ -4,7 +4,7 @@ import { compressVideo } from "./video_compression.ts";
 
 export async function sendSingleVideo(item: Item, bot: Bot, status_message: Message) {
   await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-    content: `⏳ Processing content...`,
+    content: "⏳ Processing content...",
     allowedMentions: { repliedUser: false }
   });
 
@@ -52,7 +52,7 @@ export async function sendSingleVideo(item: Item, bot: Bot, status_message: Mess
     }
   } else {
     await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-      content: `⏳ Uploading content to Discord...`,
+      content: "⏳ Uploading content to Discord...",
       allowedMentions: { repliedUser: false }
     });
     const video = await (await fetch(selected_variant.href)).blob();

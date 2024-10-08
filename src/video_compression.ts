@@ -19,7 +19,7 @@ export async function compressVideo(data: Blob) {
   const filename_compressed = `./videos/${timestamp}_compressed.mp4`;
   const filename_log = `./logs/${timestamp}.txt`;
 
-  await writeFile(filename, Buffer.from(await data.arrayBuffer()));
+  await Bun.write(filename, data);
   const original_info = await ffprobe(filename);
 
   // 4% reserved for muxing overhead
@@ -51,7 +51,7 @@ export async function compressVideo(data: Blob) {
       });
   });
 
-  const compressed_video = new Blob([await readFile(filename_compressed)]);
+  const compressed_video = new Blob([await readFile(filename_compressed, { encoding: "binary" })]);
   const compressed_info = await ffprobe(filename_compressed);
 
   // Uncomment this section to remove temporary files after compression.

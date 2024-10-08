@@ -1,13 +1,12 @@
 import { type Bot, type FileContent, type Message, MessageFlags } from "discordeno";
-import { writeFile } from "node:fs/promises";
 
-import { type Item } from "./util.ts";
+import type { Item } from "./util.ts";
 import { convertToProperCodec, getAudioData, sendVoiceMessage } from "./voice_message.ts";
 import { createSlideshowVideo } from "./slideshow_video.ts";
 
 export async function sendSlideshow(items: Array<Item>, bot: Bot, status_message: Message) {
   await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-    content: `⏳ Processing slideshow slideshow...`,
+    content: "⏳ Processing slideshow slideshow...",
     allowedMentions: { repliedUser: false }
   });
   const audio_item = items.find((item) => {
@@ -15,9 +14,9 @@ export async function sendSlideshow(items: Array<Item>, bot: Bot, status_message
   })
   if (!audio_item) throw new Error("unreachable");
   if (!audio_item.variants[0]) throw new Error("unreachable");
-  const audio = await (await fetch(audio_item.variants[0].href)).arrayBuffer();
+  const audio = await (await fetch(audio_item.variants[0].href)).blob();
   const timestamp = Date.now()
-  await writeFile(`videos/${timestamp}-tiktokaudio.mp4`, Buffer.from(audio))
+  await Bun.write(`videos/${timestamp}-tiktokaudio.mp4`, audio);
   const ogg_filename = await convertToProperCodec(`videos/${timestamp}-tiktokaudio.mp4`);
   const { duration, waveform } = await getAudioData(ogg_filename);
   let image_count = 0;
@@ -36,7 +35,7 @@ export async function sendSlideshow(items: Array<Item>, bot: Bot, status_message
   }
 
   await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-    content: `⏳ Generating slideshow video...`,
+    content: "⏳ Generating slideshow video...",
     files: filecontent_arr,
     allowedMentions: { repliedUser: false }
   });
@@ -51,12 +50,12 @@ export async function sendSlideshow(items: Array<Item>, bot: Bot, status_message
     })
   } catch { }
   
-  let content;
+  let content: Blob;
   try {
     content = await createSlideshowVideo(items);
   } catch (error) {
     await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-      content: `⚠️ Error: failed to create slideshow video.`,
+      content: "⚠️ Error: failed to create slideshow video.",
       files: filecontent_arr,
       allowedMentions: { repliedUser: false }
     });

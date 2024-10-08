@@ -1,5 +1,5 @@
-import { access, mkdir, unlink} from "node:fs/promises";
-import { createBot, type FileContent, Intents, MessageFlags, type Message } from "@discordeno/bot";
+import { access, mkdir, unlink } from "node:fs/promises";
+import { createBot, type FileContent, Intents, MessageFlags, type Message } from "discordeno";
 
 import { compressVideo } from "./video_compression.ts";
 import type { Task, Item } from "./util.ts";
@@ -9,7 +9,7 @@ import { extractYoutubeContent } from "./youtube.ts";
 import { sendSingleVideo } from "./send_single_video.ts";
 import { sendSlideshow } from "./send_slideshow.ts";
 
-if (process.env["DISCORD_TOKEN"] == null) {
+if (!process.env["DISCORD_TOKEN"]) {
   console.error("Discord token is not provided. Exiting...");
   process.exit(1);
 }
@@ -78,14 +78,18 @@ async function handleMessage(original_message: Message) {
   let items: Array<Item>;
   try {
     items = await getContent(task);
-  } catch (error: any) {
-    await updateStatus(`⚠️ Error: Unable to retrieve the required data from the provided URL.\n${error.message}`);
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      await updateStatus(`⚠️ Error: Unable to retrieve the required data from the provided URL.\n${error.message}`);
+    } else {
+      await updateStatus(`⚠️ Error: Unable to retrieve the required data from the provided URL.\nUnknown error occured:\n${error}`);
+    }
     return;
   }
 
   if (!items[0]) throw new Error("unreachable");
 
-  if (items.find((item)=>item.type === "audio")) {
+  if (items.find((item) => item.type === "audio")) {
     // slideshow
     await sendSlideshow(items, bot, status_message);
   } else if (items.length === 1 && items[0].type === "video") {
@@ -93,18 +97,18 @@ async function handleMessage(original_message: Message) {
     await sendSingleVideo(items[0], bot, status_message);
   } else {
     // multiple audio/image/video files
-    await updateStatus(`⏳ Processing content...`);
+    await updateStatus("⏳ Processing content...");
     const files: Array<FileContent> = [];
     for (const item of items) {
       if (item.variants[0] == null) throw new Error("unreachable");
 
       if (item.type === "video" && item.variants[0]?.content_length > 25 * 1024 * 1024) {
         const video = await (await fetch(item.variants[0].href)).blob();
-        await updateStatus(`⏳ Compressing video...`);
+        await updateStatus("⏳ Compressing video...");
         try {
           const compressedVideo = await compressVideo(video);
           if (compressedVideo.size <= 25 * 1024 * 1024) {
-            files.push({ blob: compressedVideo, name: "video.mp4" });
+            files.push({ blob: new Blob([compressedVideo]), name: "video.mp4" });
             continue;
           }
           await updateStatus("⚠️ Error: Video file exceeds Discord upload limits, even after compression.");
@@ -112,29 +116,30 @@ async function handleMessage(original_message: Message) {
           await updateStatus("⚠️ Error: Video compression failed.");
         }
         return;
-      } else if (item.variants[0]?.content_length > 25 * 1024 * 1024) {
+      }
+      if (item.variants[0]?.content_length > 25 * 1024 * 1024) {
         await updateStatus("⚠️ Error: An item exceeds Discord upload limits.");
         return;
-      } else {
-        // TODO: find a way to detect a proper filetype
-        const file = await (await fetch(item.variants[0].href)).blob();
-        switch (item.type) {
-          case "video": {
-            files.push({ blob: file, name: "video.mp4" });
-            break;
-          }
-          case "image": {
-            files.push({ blob: file, name: "image.png" });
-            break;
-          }
-          case "audio": {
-            files.push({ blob: file, name: "music.mp3" });
-            break;
-          }
+      }
+      // TODO: find a way to detect a proper filetype
+      const file = await (await fetch(item.variants[0].href)).blob();
+      switch (item.type) {
+        case "video": {
+          files.push({ blob: file, name: "video.mp4" });
+          break;
         }
+        case "image": {
+          files.push({ blob: file, name: "image.png" });
+          break;
+        }
+        case "audio": {
+          files.push({ blob: file, name: "music.mp3" });
+          break;
+        }
+
       }
     }
-    await updateStatus(`⏳ Uploading content to Discord...`);
+    await updateStatus("⏳ Uploading content to Discord...");
 
     await bot.helpers.editMessage(status_message.channelId, status_message.id, {
       content: "✅ Success",
