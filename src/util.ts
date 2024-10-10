@@ -1,6 +1,14 @@
+import { appendFileSync } from "node:fs";
+
 export type Item = {
-  type: "video" | "image" | "audio",
-  variants: Array<{ href: string, content_length: number, file_extention?: string, width?: number, height?: number }>
+  type: "video" | "image" | "audio";
+  variants: Array<{
+    href: string;
+    content_length: number;
+    file_extention?: string;
+    width?: number;
+    height?: number;
+  }>;
 };
 
 export type Task = {
@@ -8,19 +16,28 @@ export type Task = {
   href: string;
 };
 
+export function errorLog(message: string) {
+  appendFileSync("error_log.txt", `${message}\n`);
+}
+
 export async function validateAndGetContentLength(url: string) {
   for (let i = 3; i >= 1; i--) {
     let response = await fetch(url, { method: "HEAD" });
-    if (!response.ok && i === 1) {
-      throw new Error("recieved bad response to HEAD request.");
+    if (!response.ok) {
+      if (i === 1) {
+        throw new Error("recieved bad response to HEAD request.");
+      }
+      continue;
     }
 
     let content_length = getContentLength(response.headers);
 
     if (response.status === 405) {
       const allows = response.headers.get("allow");
-      if (allows != null) if (allows.includes("GET")) {
-        content_length = undefined;
+      if (allows != null) {
+        if (allows.includes("GET")) {
+          content_length = undefined;
+        }
       }
     }
 
@@ -29,9 +46,11 @@ export async function validateAndGetContentLength(url: string) {
       content_length = getContentLength(response.headers);
     }
 
-    if (!content_length) throw new Error("No content length provided.");
+    if (!content_length) {
+      throw new Error("No content length provided.");
+    }
 
-    let file_extention = undefined;
+    let file_extention: string | undefined;
     let header_value = response.headers.get("content-type");
     if (header_value != null) {
       if (header_value.startsWith("image/")) {
@@ -45,9 +64,8 @@ export async function validateAndGetContentLength(url: string) {
       }
     }
 
-
-    let image_width : number | undefined;
-    let image_height : number | undefined;
+    let image_width: number | undefined;
+    let image_height: number | undefined;
     header_value = response.headers.get("x-imagex-extra");
     if (header_value != null) {
       image_width = JSON.parse(header_value).enc.w;
@@ -59,7 +77,7 @@ export async function validateAndGetContentLength(url: string) {
       image_width: image_width,
       image_height: image_height,
       file_extention: file_extention
-    }
+    };
   }
   throw new Error("No content length header was found in HEAD response.");
 }
@@ -74,6 +92,6 @@ function getContentLength(headers: Headers) {
   if (header_value != null) {
     return Number.parseInt(header_value);
   }
-  
+
   return undefined;
 }

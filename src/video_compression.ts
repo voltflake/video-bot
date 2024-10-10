@@ -1,5 +1,5 @@
 import { readFile, writeFile, unlink, access, constants } from "node:fs/promises";
-import { execFile } from 'node:child_process';
+import { execFile } from "node:child_process";
 
 export async function compressVideo(data: Blob) {
   // locking mechanism to allow only one compression job at a time
@@ -29,11 +29,7 @@ export async function compressVideo(data: Blob) {
   // Note that Raspberry Pi with h264_omx codec can't hv-encode videos with bitrate less than 150kb/s
   const required_video_bitrate = Math.floor((available_bits_per_second - original_info.audio_bitrate) * 0.9);
 
-  const ffmpeg_args = [
-    "-i", `${filename}`, "-y",
-    "-c:a", "copy",
-    "-b:v", `${required_video_bitrate.toString()}`
-  ];
+  const ffmpeg_args = ["-i", `${filename}`, "-y", "-c:a", "copy", "-b:v", `${required_video_bitrate.toString()}`];
   if (process.env["CODEC"] != null) {
     ffmpeg_args.push("-c:v");
     ffmpeg_args.push(process.env["CODEC"]);
@@ -41,14 +37,14 @@ export async function compressVideo(data: Blob) {
   ffmpeg_args.push(filename_compressed);
 
   await new Promise<void>((resolve) => {
-    execFile("ffmpeg", ffmpeg_args,
-      async (error) => {
-        if (error == null) { resolve(); }
-        else {
-          await unlink(filename_lock);
-          throw new Error("execFile failed (ffmpeg).\nCheck if you have ffmpeg installed and it's available in PATH.");
-        }
-      });
+    execFile("ffmpeg", ffmpeg_args, async (error) => {
+      if (error == null) {
+        resolve();
+      } else {
+        await unlink(filename_lock);
+        throw new Error("execFile failed (ffmpeg).\nCheck if you have ffmpeg installed and it's available in PATH.");
+      }
+    });
   });
 
   const compressed_video = new Blob([await readFile(filename_compressed, { encoding: "binary" })]);
@@ -66,7 +62,7 @@ export async function compressVideo(data: Blob) {
   function calcSize(bitrate: number) {
     return (bitrate * video_duration) / bits_in_1MB;
   }
-  const log = [];
+  const log: string[] = [];
   log.push(`ffmpeg info: ${ffmpeg_args}\n`);
   log.push(`video duration: ${video_duration.toFixed(2)}s\n`);
   log.push(`original file size: ${(data.size / (1024 * 1024)).toFixed(2)}MB\n`);
@@ -88,17 +84,18 @@ export async function compressVideo(data: Blob) {
 
 async function ffprobe(filename: string) {
   const ffprobe_output: string = await new Promise((resolve) => {
-    execFile("ffprobe", [
-      "-v",
-      "quiet",
-      "-print_format", "json",
-      "-show_streams",
-      `${filename}`],
+    execFile(
+      "ffprobe",
+      ["-v", "quiet", "-print_format", "json", "-show_streams", `${filename}`],
       { encoding: "utf-8" },
       (error, stdout) => {
-        if (error == null) resolve(stdout);
-        else throw new Error("execFile failed (ffprobe).\nCheck if you have ffmpeg installed and it's available in PATH.");
-      });
+        if (error == null) {
+          resolve(stdout);
+        } else {
+          throw new Error("execFile failed (ffprobe).\nCheck if you have ffmpeg installed and it's available in PATH.");
+        }
+      }
+    );
   });
 
   const data = JSON.parse(ffprobe_output);

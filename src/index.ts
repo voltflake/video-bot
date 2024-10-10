@@ -2,7 +2,7 @@ import { access, mkdir, unlink } from "node:fs/promises";
 import { createBot, type FileContent, Intents, MessageFlags, type Message } from "discordeno";
 
 import { compressVideo } from "./video_compression.ts";
-import type { Task, Item } from "./util.ts";
+import { type Task, type Item, errorLog } from "./util.ts";
 import { extractInstagramContent } from "./instagram.ts";
 import { extractTiktokContent } from "./tiktok.ts";
 import { extractYoutubeContent } from "./youtube.ts";
@@ -18,7 +18,15 @@ const bot = createBot({
   intents: Intents.Guilds | Intents.MessageContent | Intents.GuildMessages,
   token: process.env["DISCORD_TOKEN"],
   desiredProperties: {
-    message: { author: true, channelId: true, attachments: true, id: true, guildId: true, content: true, referencedMessage: true },
+    message: {
+      author: true,
+      channelId: true,
+      attachments: true,
+      id: true,
+      guildId: true,
+      content: true,
+      referencedMessage: true
+    },
     user: { id: true, username: true, discriminator: true },
     attachment: { url: true, proxyUrl: true, id: true, filename: true, size: true, waveform: true, duration_secs: true }
   }
@@ -30,7 +38,7 @@ process.on("SIGINT", async () => {
   process.exit(0);
 });
 
-bot.events.ready = async (payload) => {
+bot.events.ready = (payload) => {
   console.info(`Logged in as ${payload.user.tag}`);
 };
 
@@ -50,7 +58,9 @@ try {
 
 try {
   await unlink("./videos/compressing.lock");
-} catch { }
+} catch {
+  errorLog('Failed to remove "compressing.lock" file');
+}
 
 // Connect to Discord
 bot.start();
@@ -73,21 +83,25 @@ async function handleMessage(original_message: Message) {
     content: `⏳ Extracting content from ${task.type}...`,
     messageReference: { messageId: original_message.id, failIfNotExists: true },
     allowedMentions: { repliedUser: false }
-  })
+  });
 
-  let items: Array<Item>;
+  let items: Item[];
   try {
     items = await getContent(task);
   } catch (error: unknown) {
     if (error instanceof Error) {
       await updateStatus(`⚠️ Error: Unable to retrieve the required data from the provided URL.\n${error.message}`);
     } else {
-      await updateStatus(`⚠️ Error: Unable to retrieve the required data from the provided URL.\nUnknown error occured:\n${error}`);
+      await updateStatus(
+        `⚠️ Error: Unable to retrieve the required data from the provided URL.\nUnknown error occured:\n${error}`
+      );
     }
     return;
   }
 
-  if (!items[0]) throw new Error("unreachable");
+  if (!items[0]) {
+    throw new Error("unreachable");
+  }
 
   if (items.find((item) => item.type === "audio")) {
     // slideshow
@@ -98,10 +112,11 @@ async function handleMessage(original_message: Message) {
   } else {
     // multiple audio/image/video files
     await updateStatus("⏳ Processing content...");
-    const files: Array<FileContent> = [];
+    const files: FileContent[] = [];
     for (const item of items) {
-      if (item.variants[0] == null) throw new Error("unreachable");
-
+      if (item.variants[0] == null) {
+        throw new Error("unreachable");
+      }
       if (item.type === "video" && item.variants[0]?.content_length > 25 * 1024 * 1024) {
         const video = await (await fetch(item.variants[0].href)).blob();
         await updateStatus("⏳ Compressing video...");
@@ -136,7 +151,6 @@ async function handleMessage(original_message: Message) {
           files.push({ blob: file, name: "music.mp3" });
           break;
         }
-
       }
     }
     await updateStatus("⏳ Uploading content to Discord...");
@@ -152,8 +166,15 @@ async function handleMessage(original_message: Message) {
     try {
       await bot.helpers.editMessage(original_message.channelId, original_message.id, {
         flags: MessageFlags.SuppressEmbeds
-      })
-    } catch { }
+      });
+    } catch {
+      let guild_name = "N/A";
+      if (original_message.guildId) {
+        guild_name = (await bot.helpers.getGuild(original_message.guildId)).name;
+      }
+      const channel_name = (await bot.helpers.getChannel(original_message.channelId)).name ?? "N/A";
+      errorLog(`Failed to suppress message embeds in "${channel_name}" from guild "${guild_name}"`);
+    }
   }
 
   return;
@@ -200,7 +221,7 @@ function SearchForTask(text: string): Task | null {
     }
     if (url.hostname.endsWith("youtube.com") || url.hostname.endsWith("youtu.be")) {
       if (url.href.includes("shorts")) {
-        return { href: url.href, type: "YouTube Short" }
+        return { href: url.href, type: "YouTube Short" };
       }
       return { href: url.href, type: "YouTube" };
     }

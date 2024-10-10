@@ -1,41 +1,62 @@
-import { validateAndGetContentLength, type Item } from "./util.ts";
-import { execFile } from 'node:child_process';
+import { errorLog, validateAndGetContentLength, type Item } from "./util.ts";
 
-export async function extractYoutubeContent(url: string) {
-  return ytdlp(url);
+export function extractYoutubeContent(url: string) {
+  return ytjar_ytapi(url);
 }
 
-async function ytdlp(url: string) {
-  for (let i = 3; i > 0; i--) {
-    const program_output: string = await new Promise((resolve) => {
-      execFile("yt-dlp", ["-f", "mp4", "--print", "urls", `${url}`],
-        { encoding: "utf-8" },
-        (error, stdout, stderr) => {
-          if (error == null){
-            resolve(stdout);
-          } else {
-            console.error(stdout, stderr)
-            throw new Error("execFile failed yt-dlp");
-          }
-        });
-    });
-
-    const links = program_output.split("\n");
-
-    if (links[0] == null) {
-      throw new Error("unexpected output from child process.");
-    }
-    let videoSize: number;
-    try {
-      videoSize = (await validateAndGetContentLength(links[0])).content_length;
-    } catch (error) {
-      if (i === 1) {
-        throw new Error("yt-dlp provided bad URLs multiple times.");
-      }
-      continue;
-    }
-    const result: Item[] = [{type: "video", variants:[{href: links[0], content_length: videoSize}]}];
-    return result;
+// https://rapidapi.com/ytjar/api/yt-api
+async function ytjar_ytapi(url: string): Promise<Item[]> {
+  const key = process.env["RAPIDAPI_KEY"];
+  if (key == null) {
+    throw new Error("RapidAPI key is not provided. Check bot configuration.");
   }
-  throw new Error("unreachable");
+
+  const target_id = url.match(/[a-zA-Z0-9]{11}/);
+  if (!target_id) {
+    throw new Error("failed to extract video ID from url");
+  }
+
+  const urlParams = {
+    id: target_id[0]
+  };
+  const urlParamsStr = new URLSearchParams(urlParams).toString();
+  const apiUrl = `https://yt-api.p.rapidapi.com/dl?${urlParamsStr}`;
+  const options = {
+    method: "GET",
+    headers: {
+      "X-RapidAPI-Key": key,
+      "x-rapidapi-host": "yt-api.p.rapidapi.com"
+    }
+  };
+
+  const response = await fetch(apiUrl, options)
+  .catch(() => {
+    throw new Error("ytjar_ytapi request failed.");
+  });
+
+  const json = await response.json()
+  .catch(() => {
+    throw new Error("Failed to parse json from ytjar_ytapi response.");
+  });
+
+  if (json.status !== "OK") {
+    throw new Error(`ytjar_ytapi returned an error: ${json.status}`);
+  }
+
+  // default video
+  const variants: Item["variants"] = [];
+  for (const format of json.formats) {
+    try {
+      const video_info = await validateAndGetContentLength(format.url);
+      variants.push({
+        href: format.url,
+        content_length: video_info.content_length,
+        file_extention: video_info.file_extention
+      });
+    } catch {
+      errorLog("Failed to validate format that ytjar_ytapi returned");
+    }
+  }
+
+  return [{ type: "video", variants: variants }];
 }

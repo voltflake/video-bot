@@ -1,10 +1,10 @@
-import { validateAndGetContentLength, type Item } from "./util.ts";
+import { errorLog, validateAndGetContentLength, type Item } from "./util.ts";
 
-export async function extractTiktokContent(url: string) {
+export function extractTiktokContent(url: string) {
   return scraperapi(url);
 }
 
-async function scraperapi(url: string): Promise<Array<Item>> {
+async function scraperapi(url: string): Promise<Item[]> {
   const key = process.env["RAPIDAPI_KEY"];
   if (key == null) {
     throw new Error("RapidAPI key is not provided. Check bot configuration.");
@@ -41,7 +41,7 @@ async function scraperapi(url: string): Promise<Array<Item>> {
 
   // default video
   if (json.data.images == null) {
-    const variants = [];
+    const variants: Item["variants"] = [];
     try {
       const video_info = await validateAndGetContentLength(json.data.play);
       variants.push({
@@ -49,7 +49,9 @@ async function scraperapi(url: string): Promise<Array<Item>> {
         content_length: video_info.content_length,
         file_extention: video_info.file_extention
       });
-    } catch { }
+    } catch {
+      errorLog('Failed to validate "play" variant from scraperapi');
+    }
 
     try {
       const video_info = await validateAndGetContentLength(json.data.wmplay);
@@ -58,7 +60,9 @@ async function scraperapi(url: string): Promise<Array<Item>> {
         content_length: video_info.content_length,
         file_extention: video_info.file_extention
       });
-    } catch { }
+    } catch {
+      errorLog('Failed to validate "wmplay" variant from scraperapi');
+    }
 
     try {
       const video_info = await validateAndGetContentLength(json.data.hdplay);
@@ -67,7 +71,9 @@ async function scraperapi(url: string): Promise<Array<Item>> {
         content_length: video_info.content_length,
         file_extention: video_info.file_extention
       });
-    } catch { }
+    } catch {
+      errorLog('Failed to validate "hdplay" variant from scraperapi');
+    }
 
     return [{ type: "video", variants: variants }];
   }
@@ -80,23 +86,30 @@ async function scraperapi(url: string): Promise<Array<Item>> {
       throw new Error("Too many images in slideshow.");
     }
 
-    const result = [];
+    const result: Item[] = [];
     for (const url of json.data.images) {
       const image_info = await validateAndGetContentLength(url);
       const item: Item = {
         type: "image",
-        variants: [{
-          href: url,
-          content_length: image_info.content_length,
-          file_extention: image_info.file_extention,
-          width: image_info.image_width,
-          height: image_info.image_height
-        }]
-      }
+        variants: [
+          {
+            href: url,
+            content_length: image_info.content_length,
+            file_extention: image_info.file_extention,
+            width: image_info.image_width,
+            height: image_info.image_height
+          }
+        ]
+      };
       result.push(item);
     }
     const audio_info = await validateAndGetContentLength(json.data.music);
-    const item: Item = { type: "audio", variants: [{ href: json.data.music, content_length: audio_info.content_length, file_extention: audio_info.file_extention }], }
+    const item: Item = {
+      type: "audio",
+      variants: [
+        { href: json.data.music, content_length: audio_info.content_length, file_extention: audio_info.file_extention }
+      ]
+    };
     result.push(item);
     return result;
   }

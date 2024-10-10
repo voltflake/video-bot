@@ -1,65 +1,72 @@
 import type { Bot, Message } from "discordeno";
-import type { Item } from "./util.ts";
+import { errorLog, type Item } from "./util.ts";
 import { compressVideo } from "./video_compression.ts";
 
 export async function sendSingleVideo(item: Item, bot: Bot, status_message: Message) {
-  await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-    content: "⏳ Processing content...",
-    allowedMentions: { repliedUser: false }
-  });
-
-  if (item.type !== "video") throw new Error("unreachable");
-  if (!item.variants[0]) throw new Error("unreachable");
-  let selected_variant = item.variants[0];
-  for (const variant of item.variants) {
-    if (variant.content_length > selected_variant.content_length) {
-      selected_variant = variant;
-    }
+  if (item.type !== "video" || !item.variants[0]) {
+    throw new Error("unreachable");
   }
 
-  if (selected_variant.content_length >= 100 * 1024 * 1024) {
-    await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-      content: `⚠️ Error: Video file size exceeds Discord upload limits.\nHere is an [uncompressed video](${selected_variant.href}).`,
-      allowedMentions: { repliedUser: false }
-    });
-  } else if (selected_variant.content_length > 25 * 1024 * 1024) {
-
-    await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-      content: `⏳ Compressing video...\nYou can use [preview](${selected_variant.href}) in a meantime.`,
-      allowedMentions: { repliedUser: false }
-    });
-
-    const video = await (await fetch(selected_variant.href)).blob();
-    try {
-      const compressedVideo = await compressVideo(video);
-      if (compressedVideo.size <= 25 * 1024 * 1024) {
-        await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-          content: "✅ Success",
-          files: [{ blob: compressedVideo, name: "video.mp4" }],
-          allowedMentions: { repliedUser: false }
-        });
-      } else {
-        await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-          content: `⚠️ Error: Video file size exceeds Discord upload limits, even after compression.\nHere is an [uncompressed video](${selected_variant.href}).`,
-          allowedMentions: { repliedUser: false }
-        });
-      }
-    } catch {
+  const use_embeds = true;
+  let success = false;
+  for (const variant of item.variants) {
+    // temp experiment
+    if (use_embeds) {
       await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-        content: `⚠️ Error: Video compression failed.\nHere is an [uncompressed video](${selected_variant.href}).`,
+        content: `[\`](${variant.href})`,
         allowedMentions: { repliedUser: false }
       });
+      success = true;
+      break;
     }
-  } else {
-    await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-      content: "⏳ Uploading content to Discord...",
-      allowedMentions: { repliedUser: false }
-    });
-    const video = await (await fetch(selected_variant.href)).blob();
-    await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-      content: "✅ Success",
-      files: [{ blob: video, name: "video.mp4" }],
-      allowedMentions: { repliedUser: false }
-    });
+
+    // variant is too large
+    if (variant.content_length >= 100 * 1024 * 1024) {
+      continue;
+    }
+
+    // try to compress
+    if (variant.content_length > 25 * 1024 * 1024) {
+      const video = await (await fetch(variant.href)).blob();
+      try {
+        const compressedVideo = await compressVideo(video);
+        if (compressedVideo.size > 25 * 1024 * 1024) {
+          errorLog("Failed to compress video enough to fit into discord limits.");
+          continue;
+        }
+        try {
+          await bot.helpers.editMessage(status_message.channelId, status_message.id, {
+            content: "✅ Success",
+            files: [{ blob: compressedVideo, name: "video.mp4" }],
+            allowedMentions: { repliedUser: false }
+          });
+          success = true;
+          break;
+        } catch {
+          errorLog("Failed to upload message to Discord, file upload limits probably changed.");
+          continue;
+        }
+      } catch {
+        errorLog("Error occured during video compression.");
+        continue;
+      }
+    }
+
+    // No need for compression
+    const video = await (await fetch(variant.href)).blob();
+    try {
+      await bot.helpers.editMessage(status_message.channelId, status_message.id, {
+        content: "✅ Success",
+        files: [{ blob: video, name: "video.mp4" }],
+        allowedMentions: { repliedUser: false }
+      });
+      success = true;
+      break;
+    } catch {
+      errorLog("Failed to upload message to Discord, file upload limits probably changed.");
+    }
+  }
+  if (!success) {
+    errorLog("Failed to download & upload a single video to Discord. All variants failed.");
   }
 }
