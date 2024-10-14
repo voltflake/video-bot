@@ -1,41 +1,44 @@
-import { type Bot, type FileContent, type Message, MessageFlags } from "discordeno";
+import { type Bot, type FileContent, MessageFlags } from "discordeno";
 
-import type { Item } from "./util.ts";
+import { log, type Item, type Task } from "./util.ts";
 import { convertToProperCodec, getAudioData, sendVoiceMessage } from "./voice_message.ts";
 import { createSlideshowVideo } from "./slideshow_video.ts";
 
-export async function sendSlideshow(items: Item[], bot: Bot, status_message: Message) {
-  await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-    content: "⏳ Processing slideshow slideshow...",
-    allowedMentions: { repliedUser: false }
-  });
+export async function sendSlideshow(task: Task, items: Item[], bot: Bot): Promise<void> {
   const audio_item = items.find((item) => {
     return item.type === "audio";
   });
+
   if (!audio_item) {
-    throw new Error("unreachable");
+    log("CRITICAL", "Cannot generate slideshow video without audio provided.");
+    return undefined;
   }
-  if (!audio_item.variants[0]) {
-    throw new Error("unreachable");
-  }
-  const audio = await (await fetch(audio_item.variants[0].href)).blob();
+
+  const audio = await (await fetch(audio_item.url)).blob();
   const timestamp = Date.now();
-  await Bun.write(`videos/${timestamp}-tiktokaudio.mp4`, audio);
-  const ogg_filename = await convertToProperCodec(`videos/${timestamp}-tiktokaudio.mp4`);
-  const { duration, waveform } = await getAudioData(ogg_filename);
+  await Bun.write(`videos/${timestamp}-tiktokaudio.mp3`, audio);
+  const ogg_filename = await convertToProperCodec(`videos/${timestamp}-tiktokaudio.mp3`);
+  if (!ogg_filename) {
+    log("CRITICAL", "Cannot generate slideshow video because convering audio file to OPUS codec failed.");
+    return undefined;
+  }
+  const audio_data = await getAudioData(ogg_filename);
+  if(!audio_data) {
+    log("CRITICAL", "Failed to extract audio data from provided audio item.");
+    return undefined;
+  }
+
   let image_count = 0;
   const image_blobs: Blob[] = [];
   for (const item of items) {
+    // TODO: Handle more images.
     if (image_count === 10) {
       break;
     }
     if (item.type !== "image") {
       continue;
     }
-    if (!item.variants[0]) {
-      throw new Error("unreachable");
-    }
-    const image = await (await fetch(item.variants[0].href)).blob();
+    const image = await (await fetch(item.url)).blob();
     image_blobs.push(image);
     image_count += 1;
   }
@@ -44,41 +47,38 @@ export async function sendSlideshow(items: Item[], bot: Bot, status_message: Mes
     filecontent_arr.push({ blob: blob, name: `SPOILER_image${i + 1}.png` });
   }
 
-  await bot.helpers.editMessage(status_message.channelId, status_message.id, {
+  const status_message = await bot.helpers.sendMessage(task.message.channelId, {
     content: "⏳ Generating slideshow video...",
     files: filecontent_arr,
+    messageReference: {messageId: task.message.id, failIfNotExists: true},
     allowedMentions: { repliedUser: false }
   });
+  const voice_message = await sendVoiceMessage(task.message.channelId, ogg_filename, audio_data.waveform, audio_data.duration);
 
-  const voice_message = await sendVoiceMessage(status_message.channelId, ogg_filename, waveform, duration);
-
-  if (!status_message.referencedMessage) {
-    throw new Error("unreachable");
+  if (!voice_message) {
+    log("FAULT", "Failed to send audio preview as discord voice message.");
   }
 
   try {
-    await bot.helpers.editMessage(status_message.channelId, status_message.referencedMessage.id, {
+    await bot.helpers.editMessage(task.message.channelId, task.message.id, {
       flags: MessageFlags.SuppressEmbeds
     });
-  } catch {}
-
-  let content: Blob;
-  try {
-    content = await createSlideshowVideo(items);
-  } catch (error) {
-    await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-      content: "⚠️ Error: failed to create slideshow video.",
-      files: filecontent_arr,
-      allowedMentions: { repliedUser: false }
-    });
-    throw error;
+  } catch {
+    log("FAULT", "Failed to remove embeds from original message");
   }
 
-  await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-    content: "✅ Success",
-    files: [{ blob: content, name: "slideshow.mp4" }],
+  const created_video = await createSlideshowVideo(items);
+  if (!created_video) {
+    log("CRITICAL", "Failed to generate slideshow video.");
+    return undefined;
+  }
+
+  await bot.helpers.editMessage(task.message.channelId, status_message.id, {
+    files: [{ blob: created_video, name: "slideshow.mp4" }],
     allowedMentions: { repliedUser: false }
   });
 
-  await bot.helpers.deleteMessage(status_message.channelId, voice_message.id);
+  if(voice_message) {
+    await bot.helpers.deleteMessage(status_message.channelId, voice_message.id);
+  }
 }

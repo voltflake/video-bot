@@ -1,97 +1,78 @@
+import type { Message } from "discordeno";
 import { appendFileSync } from "node:fs";
+import { promisify } from "node:util";
+import { execFile } from "node:child_process";
+
+export type ContentType = "image" | "video" | "audio";
+export type SocialMedia = "TikTok" | "Instagram" | "YouTube"| "YouTubeShorts";
+export type LogLevel = "INFO" | "FAULT" | "CRITICAL";
 
 export type Item = {
-  type: "video" | "image" | "audio";
-  variants: Array<{
-    href: string;
-    content_length: number;
-    file_extention?: string;
-    width?: number;
-    height?: number;
-  }>;
+  type: ContentType;
+  url: string;
+  size: number;
 };
 
 export type Task = {
-  type: "TikTok" | "YouTube" | "Instagram" | "YouTube Short";
-  href: string;
-};
-
-export function errorLog(message: string) {
-  appendFileSync("error_log.txt", `${message}\n`);
+  message: Message,
+  url: string,
+  type: SocialMedia
 }
 
-export async function validateAndGetContentLength(url: string) {
-  for (let i = 3; i >= 1; i--) {
-    let response = await fetch(url, { method: "HEAD" });
-    if (!response.ok) {
-      if (i === 1) {
-        throw new Error("recieved bad response to HEAD request.");
-      }
-      continue;
-    }
+export const execFilePromisified = promisify(execFile);
 
-    let content_length = getContentLength(response.headers);
-
-    if (response.status === 405) {
-      const allows = response.headers.get("allow");
-      if (allows != null) {
-        if (allows.includes("GET")) {
-          content_length = undefined;
-        }
-      }
-    }
-
-    if (!content_length) {
-      response = await fetch(url);
-      content_length = getContentLength(response.headers);
-    }
-
-    if (!content_length) {
-      throw new Error("No content length provided.");
-    }
-
-    let file_extention: string | undefined;
-    let header_value = response.headers.get("content-type");
-    if (header_value != null) {
-      if (header_value.startsWith("image/")) {
-        file_extention = header_value.slice("image/".length);
-      }
-      if (header_value.startsWith("video/")) {
-        file_extention = header_value.slice("video/".length);
-      }
-      if (header_value.startsWith("audio/")) {
-        file_extention = header_value.slice("audio/".length);
-      }
-    }
-
-    let image_width: number | undefined;
-    let image_height: number | undefined;
-    header_value = response.headers.get("x-imagex-extra");
-    if (header_value != null) {
-      image_width = JSON.parse(header_value).enc.w;
-      image_height = JSON.parse(header_value).enc.h;
-    }
-
-    return {
-      content_length: content_length,
-      image_width: image_width,
-      image_height: image_height,
-      file_extention: file_extention
-    };
-  }
-  throw new Error("No content length header was found in HEAD response.");
+export function log(level: LogLevel, message: string): void {
+  appendFileSync("log.txt", `[${level}] ${message}\n`);
 }
 
-function getContentLength(headers: Headers) {
-  let header_value = headers.get("content-length");
-  if (header_value != null) {
-    return Number.parseInt(header_value);
+export async function getContentLength(url: string): Promise<number | undefined> {
+  let response: undefined | Response;
+  try {
+    response = await fetch(url, { method: "HEAD" });
+  } catch {
+    log("FAULT", `Failed to submit HEAD request to ${url}`);
   }
 
-  header_value = headers.get("Content-Length");
-  if (header_value != null) {
-    return Number.parseInt(header_value);
+  let content_length: undefined | number;
+  if (response) {
+    if (response.status === 200) {
+      content_length = extractLength(response.headers);
+      if (content_length) {
+        return content_length;
+      }
+    } else {
+      log("FAULT", `Server responded with non-200 code to HEAD request when fetching for content-length headers. Code: ${response?.status} URL: ${url}`);
+    }
   }
 
-  return undefined;
+  log("INFO", "Switching to GET request...");
+  try {
+    response = await fetch(url, { method: "GET" });
+  } catch {
+    log("FAULT", `Failed to submit GET request to ${url}`);
+    return;
+  }
+
+  if (response.status === 200) {
+    content_length = extractLength(response.headers);
+    if (content_length) {
+      return content_length;
+    }
+  }
+
+  log("CRITICAL", `HEAD and GET requests both failed when fetching for content-length headers. Server responded with code ${response.status} to GET request.`);
+  return;
+
+  function extractLength(headers: Headers): number | undefined {
+    let header_value = headers.get("content-length");
+    if (header_value) {
+      return Number.parseInt(header_value);
+    }
+
+    header_value = headers.get("Content-Length");
+    if (header_value) {
+      return Number.parseInt(header_value);
+    }
+    return undefined;
+  }
 }

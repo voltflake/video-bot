@@ -1,28 +1,33 @@
 import { readFile, writeFile, unlink, access, constants } from "node:fs/promises";
-import { execFile } from "node:child_process";
+import { log, execFilePromisified } from "./util.ts";
 
-export async function compressVideo(data: Blob) {
-  // locking mechanism to allow only one compression job at a time
+export async function compressVideo(data: Blob): Promise<Blob | undefined> {
+  // Locking mechanism to allow only one compression job at a time.
   const filename_lock = "./videos/compressing.lock";
+
+  log("INFO", `video compression: Started waiting for lock. Time: ${Date.now()}`);
   while (true) {
     try {
       await access(filename_lock, constants.F_OK);
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     } catch {
       break;
     }
   }
   await writeFile(filename_lock, "");
+  log("INFO", `video compression: Lock aquired. Time: ${Date.now()}`);
 
   const timestamp = Date.now();
   const filename = `./videos/${timestamp}.mp4`;
   const filename_compressed = `./videos/${timestamp}_compressed.mp4`;
-  const filename_log = `./logs/${timestamp}.txt`;
 
-  await Bun.write(filename, data);
+  await writeFile(filename, await data.bytes());
   const original_info = await ffprobe(filename);
+  if (!original_info) {
+    return undefined;
+  }
 
-  // 4% reserved for muxing overhead
+  // 4% reserved for muxing overhead.
   const available_bits_per_second = (25 * 1024 * 1024 * 8 * 0.96) / original_info.duration_in_seconds;
 
   // 0.80 is additional space if some video gets over +10% bitrate it was given
@@ -30,74 +35,66 @@ export async function compressVideo(data: Blob) {
   const required_video_bitrate = Math.floor((available_bits_per_second - original_info.audio_bitrate) * 0.9);
 
   const ffmpeg_args = ["-i", `${filename}`, "-y", "-c:a", "copy", "-b:v", `${required_video_bitrate.toString()}`];
-  if (process.env["CODEC"] != null) {
+  const prefered_codec = Deno.env.get("CODEC");
+  if (prefered_codec) {
     ffmpeg_args.push("-c:v");
-    ffmpeg_args.push(process.env["CODEC"]);
+    ffmpeg_args.push(prefered_codec);
   }
   ffmpeg_args.push(filename_compressed);
 
-  await new Promise<void>((resolve) => {
-    execFile("ffmpeg", ffmpeg_args, async (error) => {
-      if (error == null) {
-        resolve();
-      } else {
-        await unlink(filename_lock);
-        throw new Error("execFile failed (ffmpeg).\nCheck if you have ffmpeg installed and it's available in PATH.");
-      }
-    });
-  });
+  try {
+    await execFilePromisified("ffmpeg", ffmpeg_args);
+  } catch {
+    await unlink(filename_lock);
+    log("CRITICAL", `ffmpeg execFile failed when compressing video to lower it's size. filename: ${filename} Args: ${ffmpeg_args.join(" ")}`);
+    return undefined;
+  }
+
+  const compressed_info = await ffprobe(filename_compressed);
+  if (!compressed_info) {
+    return undefined;
+  }
 
   const compressed_video = new Blob([await readFile(filename_compressed, { encoding: "binary" })]);
-  const compressed_info = await ffprobe(filename_compressed);
 
-  // Uncomment this section to remove temporary files after compression.
-  // Commented out for debuging purposes.
+  // Comment this section to keep temporary files after compression for testing.
   await unlink(filename);
   await unlink(filename_compressed);
 
-  // some telemetry to help pick better compression settings for each codec in future
+  // Telemetry to help pick better compression settings for each codec in future.
   const cbr_bitrate_error_percentage = compressed_info.video_bitrate / (required_video_bitrate * 0.01) - 100;
   const bits_in_1MB = 8 * 1024 * 1024;
   const video_duration = original_info.duration_in_seconds;
-  function calcSize(bitrate: number) {
+  function calcSize(bitrate: number): number {
     return (bitrate * video_duration) / bits_in_1MB;
   }
-  const log: string[] = [];
-  log.push(`ffmpeg info: ${ffmpeg_args}\n`);
-  log.push(`video duration: ${video_duration.toFixed(2)}s\n`);
-  log.push(`original file size: ${(data.size / (1024 * 1024)).toFixed(2)}MB\n`);
-  log.push(`original video stream: bitrate=${original_info.video_bitrate} `);
-  log.push(`size=${calcSize(original_info.video_bitrate).toFixed(2)}MB\n`);
-  log.push(`original audio stream: bitrate=${original_info.audio_bitrate} `);
-  log.push(`size=${calcSize(original_info.audio_bitrate).toFixed(2)}MB\n`);
-  log.push(`resulted file size: ${(compressed_video.size / (1024 * 1024)).toFixed(2)}MB\n`);
-  log.push(`resulted video stream: bitrate=${compressed_info.video_bitrate} `);
-  log.push(`size=${calcSize(compressed_info.video_bitrate).toFixed(2)}MB\n`);
-  log.push(`resulted audio stream: bitrate=${compressed_info.audio_bitrate} `);
-  log.push(`size=${calcSize(compressed_info.audio_bitrate).toFixed(2)}MB\n`);
-  log.push(`ffmpeg cbr error: ${cbr_bitrate_error_percentage.toFixed(2)}%\n\n`);
-  await writeFile(filename_log, log.join(""));
+  log("INFO", `ffmpeg info: ${ffmpeg_args}`);
+  log("INFO", `video duration: ${video_duration.toFixed(2)}s`);
+  log("INFO", `original file size: ${(data.size / (1024 * 1024)).toFixed(2)}MB`);
+  log("INFO", `original video stream: bitrate=${original_info.video_bitrate} `);
+  log("INFO", `size=${calcSize(original_info.video_bitrate).toFixed(2)}MB`);
+  log("INFO", `original audio stream: bitrate=${original_info.audio_bitrate} `);
+  log("INFO", `size=${calcSize(original_info.audio_bitrate).toFixed(2)}MB`);
+  log("INFO", `resulted file size: ${(compressed_video.size / (1024 * 1024)).toFixed(2)}MB`);
+  log("INFO", `resulted video stream: bitrate=${compressed_info.video_bitrate} `);
+  log("INFO", `size=${calcSize(compressed_info.video_bitrate).toFixed(2)}MB`);
+  log("INFO", `resulted audio stream: bitrate=${compressed_info.audio_bitrate} `);
+  log("INFO", `size=${calcSize(compressed_info.audio_bitrate).toFixed(2)}MB`);
+  log("INFO", `ffmpeg cbr error: ${cbr_bitrate_error_percentage.toFixed(2)}%`);
 
   await unlink(filename_lock);
   return compressed_video;
 }
 
-async function ffprobe(filename: string) {
-  const ffprobe_output: string = await new Promise((resolve) => {
-    execFile(
-      "ffprobe",
-      ["-v", "quiet", "-print_format", "json", "-show_streams", `${filename}`],
-      { encoding: "utf-8" },
-      (error, stdout) => {
-        if (error == null) {
-          resolve(stdout);
-        } else {
-          throw new Error("execFile failed (ffprobe).\nCheck if you have ffmpeg installed and it's available in PATH.");
-        }
-      }
-    );
-  });
-
+async function ffprobe(filename: string): Promise<{ duration_in_seconds: number; video_bitrate: number; audio_bitrate: number } | undefined> {
+  let ffprobe_output: string;
+  try {
+    const { stdout } = await execFilePromisified("ffprobe", ["-v", "quiet", "-print_format", "json", "-show_streams", `${filename}`], { encoding: "utf-8" });
+    ffprobe_output = stdout;
+  } catch {
+    log("CRITICAL", "ffprobe execFile failed.");
+    return undefined;
+  }
   const data = JSON.parse(ffprobe_output);
   const duration_in_seconds = Number.parseFloat(data.streams[0].duration);
   const video_bitrate = Number.parseInt(data.streams[0].bit_rate);

@@ -1,231 +1,175 @@
 import { access, mkdir, unlink } from "node:fs/promises";
-import { createBot, type FileContent, Intents, MessageFlags, type Message } from "discordeno";
+import { createBot, Intents, type Message } from "discordeno";
 
-import { compressVideo } from "./video_compression.ts";
-import { type Task, type Item, errorLog } from "./util.ts";
+import { type Item, log, type SocialMedia, type Task } from "./util.ts";
 import { extractInstagramContent } from "./instagram.ts";
 import { extractTiktokContent } from "./tiktok.ts";
 import { extractYoutubeContent } from "./youtube.ts";
 import { sendSingleVideo } from "./send_single_video.ts";
 import { sendSlideshow } from "./send_slideshow.ts";
+import process from "node:process";
 
-if (!process.env["DISCORD_TOKEN"]) {
-  console.error("Discord token is not provided. Exiting...");
+console.info("Check log.txt for unexpected events and errors.");
+console.info("Feedback and bug reports: https://github.com/voltflake/video-bot/issues/new");
+
+const bot_token = Deno.env.get("DISCORD_TOKEN");
+if (!bot_token) {
+  log("CRITICAL", "Discord bot token does not exist. Exiting...");
   process.exit(1);
 }
 
 const bot = createBot({
   intents: Intents.Guilds | Intents.MessageContent | Intents.GuildMessages,
-  token: process.env["DISCORD_TOKEN"],
-  desiredProperties: {
-    message: {
-      author: true,
-      channelId: true,
-      attachments: true,
-      id: true,
-      guildId: true,
-      content: true,
-      referencedMessage: true
-    },
-    user: { id: true, username: true, discriminator: true },
-    attachment: { url: true, proxyUrl: true, id: true, filename: true, size: true, waveform: true, duration_secs: true }
-  }
+  token: bot_token,
+  defaultDesiredPropertiesValue: true,
+  // desiredProperties: {
+  //   message: {
+  //     author: true,
+  //     channelId: true,
+  //     attachments: true,
+  //     id: true,
+  //     guildId: true,
+  //     content: true,
+  //     referencedMessage: true
+  //   },
+  //   user: { id: true, username: true, discriminator: true },
+  //   attachment: { url: true, proxyUrl: true, id: true, filename: true, size: true, waveform: true, duration_secs: true }
+  // }
 });
 
-// Graceful shutdown
+// Graceful shutdown.
 process.on("SIGINT", async () => {
+  console.info("Shutting down, please wait...");
   await bot.shutdown();
   process.exit(0);
 });
 
-bot.events.ready = (payload) => {
+// Let bot owner know it's working.
+bot.events.ready = (payload): void => {
   console.info(`Logged in as ${payload.user.tag}`);
 };
 
 bot.events.messageCreate = handleMessage;
 
 try {
-  await access("./logs");
+  await access("videos");
 } catch {
-  await mkdir("./logs");
+  await mkdir("videos");
 }
 
 try {
-  await access("./videos");
+  await unlink("videos/compressing.lock");
 } catch {
-  await mkdir("./videos");
+  // File most likely didn't exist.
 }
 
-try {
-  await unlink("./videos/compressing.lock");
-} catch {
-  errorLog('Failed to remove "compressing.lock" file');
-}
-
-// Connect to Discord
+// Connect to Gateway and start doing stuff.
 bot.start();
 
-async function handleMessage(original_message: Message) {
-  if (original_message.author.id === bot.id) {
+// Where all messages are handled.
+async function handleMessage(message: Message): Promise<void> {
+  if (message.author.id === bot.id) {
+    return;
+  }
+  if (!message.content) {
+    return;
+  }
+  const task = findTask(message);
+  if (task) {
+    await processTask(task);
+  }
+}
+
+async function processTask(task: Task): Promise<void> {
+  const items = await extractItems(task);
+
+  // Error during content search, already logged.
+  if (!items) {
     return;
   }
 
-  if (!original_message.content) {
+  // Simple case. A single video.
+  if (items.length === 1 && items[0].type === "video") {
+    await sendSingleVideo(task, items[0], bot);
     return;
   }
 
-  const task = SearchForTask(original_message.content);
-  if (task === null) {
-    return;
-  }
-
-  const status_message = await bot.helpers.sendMessage(original_message.channelId, {
-    content: `⏳ Extracting content from ${task.type}...`,
-    messageReference: { messageId: original_message.id, failIfNotExists: true },
-    allowedMentions: { repliedUser: false }
+  const audio = items.find((item) => {
+    return item.type === "audio";
   });
 
-  let items: Item[];
-  try {
-    items = await getContent(task);
-  } catch (error: unknown) {
-    if (error instanceof Error) {
-      await updateStatus(`⚠️ Error: Unable to retrieve the required data from the provided URL.\n${error.message}`);
-    } else {
-      await updateStatus(
-        `⚠️ Error: Unable to retrieve the required data from the provided URL.\nUnknown error occured:\n${error}`
-      );
-    }
+  // Complex case. Generate Slideshow and send it.
+  if (items.length > 1 && audio) {
+    await sendSlideshow(task, items, bot);
     return;
   }
 
-  if (!items[0]) {
-    throw new Error("unreachable");
+  // Complex case. Send Photos & Videos.
+  if (items.length > 1 && !audio) {
+    // await sendGallery(task, items, bot);
+    return;
   }
 
-  if (items.find((item) => item.type === "audio")) {
-    // slideshow
-    await sendSlideshow(items, bot, status_message);
-  } else if (items.length === 1 && items[0].type === "video") {
-    // single video case
-    await sendSingleVideo(items[0], bot, status_message);
-  } else {
-    // multiple audio/image/video files
-    await updateStatus("⏳ Processing content...");
-    const files: FileContent[] = [];
-    for (const item of items) {
-      if (item.variants[0] == null) {
-        throw new Error("unreachable");
-      }
-      if (item.type === "video" && item.variants[0]?.content_length > 25 * 1024 * 1024) {
-        const video = await (await fetch(item.variants[0].href)).blob();
-        await updateStatus("⏳ Compressing video...");
-        try {
-          const compressedVideo = await compressVideo(video);
-          if (compressedVideo.size <= 25 * 1024 * 1024) {
-            files.push({ blob: new Blob([compressedVideo]), name: "video.mp4" });
-            continue;
-          }
-          await updateStatus("⚠️ Error: Video file exceeds Discord upload limits, even after compression.");
-        } catch {
-          await updateStatus("⚠️ Error: Video compression failed.");
-        }
-        return;
-      }
-      if (item.variants[0]?.content_length > 25 * 1024 * 1024) {
-        await updateStatus("⚠️ Error: An item exceeds Discord upload limits.");
-        return;
-      }
-      // TODO: find a way to detect a proper filetype
-      const file = await (await fetch(item.variants[0].href)).blob();
-      switch (item.type) {
-        case "video": {
-          files.push({ blob: file, name: "video.mp4" });
-          break;
-        }
-        case "image": {
-          files.push({ blob: file, name: "image.png" });
-          break;
-        }
-        case "audio": {
-          files.push({ blob: file, name: "music.mp3" });
-          break;
-        }
-      }
-    }
-    await updateStatus("⏳ Uploading content to Discord...");
-
-    await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-      content: "✅ Success",
-      files: files,
-      allowedMentions: { repliedUser: false }
-    });
+  let items_string = "";
+  for (const [index, item] of items.entries()) {
+    items_string += `${item.type}${index === items.length - 1 ? "" : ","}`;
   }
-
-  if (task.type !== "YouTube") {
-    try {
-      await bot.helpers.editMessage(original_message.channelId, original_message.id, {
-        flags: MessageFlags.SuppressEmbeds
-      });
-    } catch {
-      let guild_name = "N/A";
-      if (original_message.guildId) {
-        guild_name = (await bot.helpers.getGuild(original_message.guildId)).name;
-      }
-      const channel_name = (await bot.helpers.getChannel(original_message.channelId)).name ?? "N/A";
-      errorLog(`Failed to suppress message embeds in "${channel_name}" from guild "${guild_name}"`);
-    }
-  }
-
-  return;
-  async function updateStatus(text: string) {
-    await bot.helpers.editMessage(status_message.channelId, status_message.id, {
-      content: text,
-      allowedMentions: { repliedUser: false }
-    });
-  }
+  log("CRITICAL", `Unreachable code reached in when deciding how to represent content in Discord. Items are: ${items_string}`);
 }
 
-async function getContent(task: Task) {
+async function extractItems(task: Task): Promise<Item[] | undefined> {
+  let result: undefined | Item[];
   switch (task.type) {
-    case "YouTube Short":
-    case "YouTube": {
-      return await extractYoutubeContent(task.href);
+    case "YouTube":
+    case "YouTubeShorts": {
+      result = await extractYoutubeContent(task.url);
+      break;
     }
     case "Instagram": {
-      return await extractInstagramContent(task.href);
+      result = await extractInstagramContent(task.url);
+      break;
     }
     case "TikTok": {
-      return await extractTiktokContent(task.href);
+      result = await extractTiktokContent(task.url);
+      break;
     }
   }
+  if (!result) {
+    return undefined;
+  }
+  return result;
 }
 
-function SearchForTask(text: string): Task | null {
-  const hrefs = text.match(/(?:https:\/\/|http:\/\/)\S+/gm);
-  if (hrefs == null) {
-    return null;
-  }
-
-  const urls = new Array<URL>();
-  for (const element of hrefs) {
-    urls.push(new URL(element));
-  }
-
+function findTask(message: Message): Task | undefined {
+  const urls = extractURLs(message.content);
   for (const url of urls) {
+    let type: SocialMedia | undefined;
     if (url.hostname.endsWith("tiktok.com")) {
-      return { href: url.href, type: "TikTok" };
-    }
-    if (url.hostname.endsWith("instagram.com")) {
-      return { href: url.href, type: "Instagram" };
-    }
-    if (url.hostname.endsWith("youtube.com") || url.hostname.endsWith("youtu.be")) {
+      type = "TikTok";
+    } else if (url.hostname.endsWith("instagram.com")) {
+      type = "Instagram";
+    } else if (url.hostname.endsWith("youtube.com") || url.hostname.endsWith("youtu.be")) {
       if (url.href.includes("shorts")) {
-        return { href: url.href, type: "YouTube Short" };
+        type = "YouTubeShorts";
+      } else {
+        type = "YouTube";
       }
-      return { href: url.href, type: "YouTube" };
+    }
+    if (type) {
+      return { message: message, url: url.href, type: type };
     }
   }
+  return undefined;
 
-  return null;
+  function extractURLs(text: string): URL[] {
+    const result: URL[] = [];
+    const urls = text.match(/(?:https:\/\/|http:\/\/)\S+/g);
+    if (!urls) {
+      return result;
+    }
+    for (const url of urls) {
+      result.push(new URL(url));
+    }
+    return result;
+  }
 }

@@ -1,18 +1,25 @@
-import { errorLog, validateAndGetContentLength, type Item } from "./util.ts";
+import { getContentLength, log, type Item } from "./util.ts";
 
-export function extractTiktokContent(url: string) {
-  return scraperapi(url);
+export async function extractTiktokContent(url: string): Promise<Item[] | undefined> {
+  const result = await tiktokscraper7(url);
+  if (result) {
+    return result;
+  }
+  log("CRITICAL", "tiktokscraper7 failed.");
+  return undefined;
 }
 
-async function scraperapi(url: string): Promise<Item[]> {
-  const key = process.env["RAPIDAPI_KEY"];
+// https://rapidapi.com/tikwm-tikwm-default/api/tiktok-scraper7
+async function tiktokscraper7(url: string): Promise<Item[] | undefined> {
+  const key = Deno.env.get("RAPIDAPI_KEY");
   if (key == null) {
-    throw new Error("RapidAPI key is not provided. Check bot configuration.");
+    log("CRITICAL", "tiktokscraper7: RapidAPI key is not provided. Check bot configuration.");
+    return undefined;
   }
 
   const urlParams = {
     url: url,
-    hd: "1"
+    hd: "0"
   };
   const urlParamsStr = new URLSearchParams(urlParams).toString();
   const apiUrl = `https://tiktok-scraper7.p.rapidapi.com/?${urlParamsStr}`;
@@ -24,95 +31,60 @@ async function scraperapi(url: string): Promise<Item[]> {
     }
   };
 
-  const response = await fetch(apiUrl, options).catch(() => {
-    throw new Error("ScraperAPI request failed.");
-  });
-
-  const responseText = await response.text().catch(() => {
-    throw new Error("Failed to parse text from ScraperAPI response.");
-  });
-
-  const json = JSON.parse(responseText);
-
-  if (json.code !== 0) {
-    // probably a live video
-    throw new Error(`API returned an error. Bad link or a live video was provided. ${json.code}`);
+  let json: { msg: string; data: { play: string; wmplay: string; images: string[] } };
+  try {
+    const response = await fetch(apiUrl, options);
+    json = await response.json();
+  } catch {
+    log("CRITICAL", "tiktokscraper7: API fetch() request failed.");
+    return undefined;
   }
 
-  // default video
-  if (json.data.images == null) {
-    const variants: Item["variants"] = [];
-    try {
-      const video_info = await validateAndGetContentLength(json.data.play);
-      variants.push({
-        href: json.data.play,
-        content_length: video_info.content_length,
-        file_extention: video_info.file_extention
-      });
-    } catch {
-      errorLog('Failed to validate "play" variant from scraperapi');
-    }
-
-    try {
-      const video_info = await validateAndGetContentLength(json.data.wmplay);
-      variants.push({
-        href: json.data.wmplay,
-        content_length: video_info.content_length,
-        file_extention: video_info.file_extention
-      });
-    } catch {
-      errorLog('Failed to validate "wmplay" variant from scraperapi');
-    }
-
-    try {
-      const video_info = await validateAndGetContentLength(json.data.hdplay);
-      variants.push({
-        href: json.data.hdplay,
-        content_length: video_info.content_length,
-        file_extention: video_info.file_extention
-      });
-    } catch {
-      errorLog('Failed to validate "hdplay" variant from scraperapi');
-    }
-
-    return [{ type: "video", variants: variants }];
+  // Probably a live video or a bad link
+  if (json.msg !== "success") {
+    log("CRITICAL", `tiktokscraper7: API returned an error: ${json.msg}. URL: ${url}`);
+    return undefined;
   }
 
-  // it's a slideshow
-  if (json.data.images.length > 0) {
-    // discord supports up to 10 attachments per message
-    // (9 images + sound) max
-    if (json.data.images.length > 9) {
-      throw new Error("Too many images in slideshow.");
+  // Default video
+  if (!json.data.images) {
+    let size = await getContentLength(json.data.play);
+    if (size) {
+      return [{ type: "video", url: json.data.play, size: size }];
     }
 
+    log("FAULT", `tiktokscraper7: default "play" format failed. URL: ${json.data.play}`);
+    log("INFO", `tiktokscraper7: Trying "wmplay". URL: ${json.data.wmplay}`);
+
+    size = await getContentLength(json.data.wmplay);
+    if (size) {
+      return [{ type: "video", url: json.data.wmplay, size: size }];
+    }
+
+    log("CRITICAL", `tiktokscraper7: both "play" and "wmplay" formats failed.`);
+    return undefined;
+  }
+
+  // Slideshow post
+  if (json.data.images) {
     const result: Item[] = [];
-    for (const url of json.data.images) {
-      const image_info = await validateAndGetContentLength(url);
-      const item: Item = {
-        type: "image",
-        variants: [
-          {
-            href: url,
-            content_length: image_info.content_length,
-            file_extention: image_info.file_extention,
-            width: image_info.image_width,
-            height: image_info.image_height
-          }
-        ]
-      };
-      result.push(item);
+    const size = await getContentLength(json.data.play);
+    if (!size) {
+      log("CRITICAL", "tiktokscraper7: failed to validate audio item from slideshow post.");
+      return undefined;
     }
-    const audio_info = await validateAndGetContentLength(json.data.music);
-    const item: Item = {
-      type: "audio",
-      variants: [
-        { href: json.data.music, content_length: audio_info.content_length, file_extention: audio_info.file_extention }
-      ]
-    };
-    result.push(item);
+    result.push({ type: "audio", url: json.data.play, size: size });
+    for (const image_url of json.data.images) {
+      const size = await getContentLength(json.data.wmplay);
+      if (!size) {
+        log("CRITICAL", "tiktokscraper7: failed to validate one of images from slideshow post.");
+        return undefined;
+      }
+      result.push({ type: "image", url: image_url, size: size  });
+    }
     return result;
   }
 
-  throw new Error("Unreachable code reached. Bug in scraperapi module.");
+  log("CRITICAL", "tiktokscraper7: provided URL is not a video nor a slideshow post.");
+  return undefined;
 }

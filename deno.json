@@ -1,0 +1,34 @@
+{
+	"imports": {
+		"discordeno": "npm:discordeno@^19.0.0-next.76ad81d"
+	},
+	"compilerOptions": {
+		"lib": ["ESNext", "DOM", "deno.ns"],
+		"allowUnreachableCode": false,
+		"allowUnusedLabels": false,
+		"exactOptionalPropertyTypes": true,
+		"noFallthroughCasesInSwitch": true,
+		"noImplicitAny": true,
+		"noImplicitOverride": true,
+		"noImplicitThis": true,
+		"noImplicitReturns": true,
+		"noPropertyAccessFromIndexSignature": true,
+		"strict": true,
+		"noUnusedLocals": true,
+		"noUncheckedIndexedAccess": false,
+		"noUnusedParameters": true,
+		"strictBindCallApply": true,
+		"strictBuiltinIteratorReturn": true,
+		"strictFunctionTypes": true,
+		"strictNullChecks": true,
+		"strictPropertyInitialization": true,
+		"useUnknownInCatchVariables": true
+	},
+  "fmt": {
+    "useTabs": false,
+    "indentWidth": 2,
+    "lineWidth": 200,
+    "semiColons": true,
+    "singleQuote": false
+}
+}
