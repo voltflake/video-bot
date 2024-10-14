@@ -1,7 +1,4 @@
-import type { Message } from "discordeno";
-import { appendFileSync } from "node:fs";
-import { promisify } from "node:util";
-import { execFile } from "node:child_process";
+import type { Message } from "npm:discordeno";
 
 export type ContentType = "image" | "video" | "audio";
 export type SocialMedia = "TikTok" | "Instagram" | "YouTube"| "YouTubeShorts";
@@ -19,10 +16,9 @@ export type Task = {
   type: SocialMedia
 }
 
-export const execFilePromisified = promisify(execFile);
-
+const encoder = new TextEncoder();
 export function log(level: LogLevel, message: string): void {
-  appendFileSync("log.txt", `[${level}] ${message}\n`);
+  Deno.writeFileSync("log.txt", encoder.encode(`[${level}] ${message}\n`), { append: true });
 }
 
 export async function getContentLength(url: string): Promise<number | undefined> {

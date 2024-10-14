@@ -1,7 +1,4 @@
 {
-	"imports": {
-		"discordeno": "npm:discordeno@^19.0.0-next.76ad81d"
-	},
 	"compilerOptions": {
 		"lib": ["ESNext", "DOM", "deno.ns"],
 		"allowUnreachableCode": false,

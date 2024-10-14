@@ -1,4 +1,4 @@
-import { type Bot, type FileContent, MessageFlags } from "discordeno";
+import { type Bot, type FileContent, MessageFlags } from "npm:discordeno";
 
 import { log, type Item, type Task } from "./util.ts";
 import { convertToProperCodec, getAudioData, sendVoiceMessage } from "./voice_message.ts";
@@ -14,9 +14,9 @@ export async function sendSlideshow(task: Task, items: Item[], bot: Bot): Promis
     return undefined;
   }
 
-  const audio = await (await fetch(audio_item.url)).blob();
+  const audio = await (await fetch(audio_item.url)).bytes();
   const timestamp = Date.now();
-  await Bun.write(`videos/${timestamp}-tiktokaudio.mp3`, audio);
+  await Deno.writeFile(`videos/${timestamp}-tiktokaudio.mp3`, audio);
   const ogg_filename = await convertToProperCodec(`videos/${timestamp}-tiktokaudio.mp3`);
   if (!ogg_filename) {
     log("CRITICAL", "Cannot generate slideshow video because convering audio file to OPUS codec failed.");
@@ -29,7 +29,7 @@ export async function sendSlideshow(task: Task, items: Item[], bot: Bot): Promis
   }
 
   let image_count = 0;
-  const image_blobs: Blob[] = [];
+  const images: Uint8Array[] = [];
   for (const item of items) {
     // TODO: Handle more images.
     if (image_count === 10) {
@@ -38,13 +38,13 @@ export async function sendSlideshow(task: Task, items: Item[], bot: Bot): Promis
     if (item.type !== "image") {
       continue;
     }
-    const image = await (await fetch(item.url)).blob();
-    image_blobs.push(image);
+    const image = await (await fetch(item.url)).bytes();
+    images.push(image);
     image_count += 1;
   }
   const filecontent_arr: FileContent[] = [];
-  for (const [i, blob] of image_blobs.entries()) {
-    filecontent_arr.push({ blob: blob, name: `SPOILER_image${i + 1}.png` });
+  for (const [i, data] of images.entries()) {
+    filecontent_arr.push({ blob: new Blob([data]), name: `SPOILER_image${i + 1}.png` });
   }
 
   const status_message = await bot.helpers.sendMessage(task.message.channelId, {
@@ -74,7 +74,7 @@ export async function sendSlideshow(task: Task, items: Item[], bot: Bot): Promis
   }
 
   await bot.helpers.editMessage(task.message.channelId, status_message.id, {
-    files: [{ blob: created_video, name: "slideshow.mp4" }],
+    files: [{ blob: new Blob([created_video]), name: "slideshow.mp4" }],
     allowedMentions: { repliedUser: false }
   });
 

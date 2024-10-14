@@ -1,13 +1,18 @@
-import type { Message } from "discordeno";
-import { execFilePromisified, log } from "./util.ts";
+import type { Message } from "npm:discordeno";
+import { log } from "./util.ts";
 import { readFile, unlink } from "node:fs/promises";
 import { Buffer } from "node:buffer";
 
 export async function convertToProperCodec(path_to_audio_file: string): Promise<string | undefined> {
   try {
-    await execFilePromisified("ffmpeg", ["-i", path_to_audio_file, "-c:a", "libopus", "-vn", `${path_to_audio_file}.ogg`], { encoding: "utf-8", shell: true });
+    const command = new Deno.Command("ffmpeg", { args: ["-i", path_to_audio_file, "-c:a", "libopus", "-vn", `${path_to_audio_file}.ogg`] });
+    const { code } = await command.output();
+    if (code !== 0) {
+      log("CRITICAL", '"ffmpeg" exited with non 0 code when creating OPUS audio file.');
+      return undefined;
+    }
   } catch {
-    log("CRITICAL", "ffmpeg execFile failed when converting audio file to OPUS codec.");
+    log("CRITICAL", 'Spawning "ffmpeg" process failed.');
     return undefined;
   }
   return `${path_to_audio_file}.ogg`;
@@ -15,9 +20,14 @@ export async function convertToProperCodec(path_to_audio_file: string): Promise<
 
 export async function getAudioData(path_to_audio_file: string): Promise<{ duration: number; waveform: Uint8Array } | undefined> {
   try {
-    await execFilePromisified("ffmpeg", ["-i", path_to_audio_file, "-f", "u8", "-ac", "1", "-ar", "1000", `${path_to_audio_file}.raw`], { encoding: "utf-8", shell: true });
+    const command = new Deno.Command("ffmpeg", { args: ["-i", path_to_audio_file, "-f", "u8", "-ac", "1", "-ar", "1000", `${path_to_audio_file}.raw`] });
+    const { code } = await command.output();
+    if (code !== 0) {
+      log("CRITICAL", '"ffmpeg" exited with non 0 code when creating raw audio file.');
+      return undefined;
+    }
   } catch {
-    log("CRITICAL", "ffmpeg execFile failed when converting .ogg audio file to raw data.");
+    log("CRITICAL", 'Spawning "ffmpeg" process failed.');
     return undefined;
   }
 

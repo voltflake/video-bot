@@ -1,5 +1,5 @@
 import { readFile, writeFile, unlink, access, constants } from "node:fs/promises";
-import { log, execFilePromisified } from "./util.ts";
+import { log } from "./util.ts";
 
 export async function compressVideo(data: Blob): Promise<Blob | undefined> {
   // Locking mechanism to allow only one compression job at a time.
@@ -43,13 +43,19 @@ export async function compressVideo(data: Blob): Promise<Blob | undefined> {
   ffmpeg_args.push(filename_compressed);
 
   try {
-    await execFilePromisified("ffmpeg", ffmpeg_args);
+    const command = new Deno.Command("ffmpeg", { args: ffmpeg_args });
+    const { code } = await command.output();
+    if (code !== 0) {
+      log("CRITICAL", `ffmpeg failed when compressing video to lower it's size. filename: ${filename} Args: ${ffmpeg_args.join(" ")}`);
+      await unlink(filename_lock);
+      return undefined;
+    }
   } catch {
+    log("CRITICAL", 'Spawning "ffprobe" process failed.');
     await unlink(filename_lock);
-    log("CRITICAL", `ffmpeg execFile failed when compressing video to lower it's size. filename: ${filename} Args: ${ffmpeg_args.join(" ")}`);
     return undefined;
   }
-
+  
   const compressed_info = await ffprobe(filename_compressed);
   if (!compressed_info) {
     return undefined;
@@ -89,10 +95,15 @@ export async function compressVideo(data: Blob): Promise<Blob | undefined> {
 async function ffprobe(filename: string): Promise<{ duration_in_seconds: number; video_bitrate: number; audio_bitrate: number } | undefined> {
   let ffprobe_output: string;
   try {
-    const { stdout } = await execFilePromisified("ffprobe", ["-v", "quiet", "-print_format", "json", "-show_streams", `${filename}`], { encoding: "utf-8" });
-    ffprobe_output = stdout;
+    const command = new Deno.Command("ffprobe", { args: ["-v", "quiet", "-print_format", "json", "-show_streams", `${filename}`] });
+    const { code, stdout } = await command.output();
+    ffprobe_output = new TextDecoder().decode(stdout);
+    if (code !== 0) {
+      log("CRITICAL", '"ffprobe" exited with non 0 code.');
+      return undefined;
+    }
   } catch {
-    log("CRITICAL", "ffprobe execFile failed.");
+    log("CRITICAL", 'Spawning "ffprobe" process failed.');
     return undefined;
   }
   const data = JSON.parse(ffprobe_output);

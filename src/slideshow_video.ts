@@ -1,6 +1,6 @@
-import { readdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { readdir, unlink, writeFile } from "node:fs/promises";
 
-import { execFilePromisified, log, type Item } from "./util.ts";
+import { type Item, log } from "./util.ts";
 
 // WARNING: h264_v4l2m2m encoder on rpi4 can fail on bigger resolutions
 // 756x1344 is maximum for 9:16 aspect ratio (4096 16pixel blocks) for 60fps
@@ -8,7 +8,7 @@ import { execFilePromisified, log, type Item } from "./util.ts";
 
 // WARNING: libx264 doesn't encode resolutions that are not divisible by 2
 
-export async function createSlideshowVideo(items: Item[]): Promise<Blob | undefined> {
+export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array | undefined> {
   let codec = "libx264";
   const prefered_codec = Deno.env.get("CODEC");
   if (prefered_codec) {
@@ -39,10 +39,15 @@ export async function createSlideshowVideo(items: Item[]): Promise<Blob | undefi
   for (const filename of image_filenames) {
     let magick_output: string;
     try {
-      const {stdout} = await execFilePromisified("magick", ["identify", filename], { encoding: "utf-8", shell: true });
-      magick_output = stdout;
+      const command = new Deno.Command("magick", { args: ["identify", filename] });
+      const { code, stdout } = await command.output();
+      magick_output = new TextDecoder().decode(stdout);
+      if (code !== 0) {
+        log("CRITICAL", '"magick identify" exited with non 0 code.');
+        return undefined;
+      }
     } catch {
-      log("CRITICAL", "execFile failed (magick identify)");
+      log("CRITICAL", 'Spawning "magick identify" process failed.');
       return undefined;
     }
 
@@ -52,13 +57,13 @@ export async function createSlideshowVideo(items: Item[]): Promise<Blob | undefi
       log("CRITICAL", "No matches found when using regex on magick identify output.");
       return undefined;
     }
-    if(!match.groups) {
+    if (!match.groups) {
       log("CRITICAL", "No groups were found in matches found when using regex on magick identify output.");
       return undefined;
     }
     image_resolutions.push({
       width: Number.parseInt(match.groups["width"]),
-      height: Number.parseInt(match.groups["height"])
+      height: Number.parseInt(match.groups["height"]),
     });
   }
 
@@ -102,11 +107,28 @@ export async function createSlideshowVideo(items: Item[]): Promise<Blob | undefi
     const output_image_filename = `./videos/${timestamp}-image${index}-scaled.png`;
     // magick convert image1.jpg -resize "1080x1350" -background black -gravity center -extent 1080x1350 output_image2.jpg
     try {
-      await execFilePromisified("magick",
-        ["convert", image_filename, "-resize", `"${selected_width}x${max_height}"`, "-background", "black", "-gravity", "center", "-extent", `${selected_width}x${max_height}`, output_image_filename],
-        { encoding: "utf-8", shell: true });
+      const command = new Deno.Command("magick", {
+        args: [
+          "convert",
+          image_filename,
+          "-resize",
+          `"${selected_width}x${max_height}"`,
+          "-background",
+          "black",
+          "-gravity",
+          "center",
+          "-extent",
+          `${selected_width}x${max_height}`,
+          output_image_filename,
+        ],
+      });
+      const { code } = await command.output();
+      if (code !== 0) {
+        log("CRITICAL", '"magick convert" exited with non 0 code.');
+        return undefined;
+      }
     } catch {
-      log("CRITICAL", "execFile failed (magick convert)");
+      log("CRITICAL", 'Spawning "magick convert" process failed.');
       return undefined;
     }
     scaled_image_filenames.push(output_image_filename);
@@ -122,9 +144,16 @@ export async function createSlideshowVideo(items: Item[]): Promise<Blob | undefi
   if (image_count === 1) {
     try {
       const ffmpeg_args = `-loop 1 -framerate 60 -i ${scaled_image_filenames[0]} -c:v ${codec} -pix_fmt yuv420p -r 60 -frames ${loop_duration} videos/${timestamp}-slideshow_loop.mp4`;
-      await execFilePromisified("ffmpeg", ffmpeg_args.split(" "), { encoding: "utf-8", shell: true });
+      const command = new Deno.Command("ffmpeg", {
+        args: ffmpeg_args.split(" "),
+      });
+      const { code } = await command.output();
+      if (code !== 0) {
+        log("CRITICAL", "ffmpeg exited with non 0 code. (ffmpeg 1 image slideshow loop generation)");
+        return undefined;
+      }
     } catch {
-      log("CRITICAL", "execFile failed (ffmpeg 1 image slideshow loop generation)");
+      log("CRITICAL", "Spawning ffmpeg process failed. (ffmpeg 1 image slideshow loop generation)");
       return undefined;
     }
   } else {
@@ -142,7 +171,9 @@ export async function createSlideshowVideo(items: Item[]): Promise<Blob | undefi
       const second_input = current_second_input + 1 < image_count ? current_second_input + 1 : 0;
       const output = current_filter_result + 1;
       ffmpeg_command = ffmpeg_command.concat(
-        `[m${first_input}][${second_input}]xfade=transition=slideleft:duration=${transition_duration.toFixed(1)}:offset=${((slide_duration + transition_duration) * i - transition_duration).toFixed(1)}[m${output}];`
+        `[m${first_input}][${second_input}]xfade=transition=slideleft:duration=${transition_duration.toFixed(1)}:offset=${
+          ((slide_duration + transition_duration) * i - transition_duration).toFixed(1)
+        }[m${output}];`,
       );
       current_filter_result += 1;
       current_second_input = second_input;
@@ -151,24 +182,39 @@ export async function createSlideshowVideo(items: Item[]): Promise<Blob | undefi
     ffmpeg_command = ffmpeg_command.concat(`" -map "[m${current_filter_result}]" -c:v ${codec} -pix_fmt yuv420p -r 60 -frames ${loop_duration} videos/${timestamp}-slideshow_loop.mp4`);
 
     try {
-      await execFilePromisified("ffmpeg", ffmpeg_command.split(" ").slice(1), { encoding: "utf-8", shell: true });
+      const command = new Deno.Command("ffmpeg", {
+        args: ffmpeg_command.split(" ").slice(1),
+      });
+      const { code } = await command.output();
+      if (code !== 0) {
+        log("CRITICAL", "ffmpeg exited with non 0 code. (ffmpeg 2 or more images slideshow loop generation)");
+        return undefined;
+      }
     } catch {
-      log("CRITICAL", "execFile failed (ffmpeg 2 or more images slideshow loop generation)");
+      log("CRITICAL", "Spawning ffmpeg process failed. (ffmpeg 2 or more images slideshow loop generation)");
       return undefined;
     }
   }
 
   // create final video with music
-  const ffmpeg_command2 = `ffmpeg -hide_banner -stream_loop -1 -i videos/${timestamp}-slideshow_loop.mp4 -i ${audio_filename} -shortest -c:v copy -c:a aac -pix_fmt yuv420p -movflags +faststart videos/${timestamp}-output-swipe.mp4`;
-  
+  const ffmpeg_command2 =
+    `ffmpeg -hide_banner -stream_loop -1 -i videos/${timestamp}-slideshow_loop.mp4 -i ${audio_filename} -shortest -c:v copy -c:a aac -pix_fmt yuv420p -movflags +faststart videos/${timestamp}-output-swipe.mp4`;
+
   try {
-    await execFilePromisified("ffmpeg", ffmpeg_command2.split(" ").slice(1), { encoding: "utf-8", shell: true });
+    const command = new Deno.Command("ffmpeg", {
+      args: ffmpeg_command2.split(" ").slice(1),
+    });
+    const { code } = await command.output();
+    if (code !== 0) {
+      log("CRITICAL", "ffmpeg exited with non 0 code. (ffmpeg final slideshow generation)");
+      return undefined;
+    }
   } catch {
-    log("CRITICAL", "execFile failed (ffmpeg final slideshow generation)");
+    log("CRITICAL", "Spawning ffmpeg process failed. (ffmpeg final slideshow generation)");
     return undefined;
   }
 
-  const result = new Blob([await readFile(`./videos/${timestamp}-output-swipe.mp4`)]);
+  const result = await Deno.readFile(`./videos/${timestamp}-output-swipe.mp4`);
 
   // cleanup temp files
   const files = await readdir("./videos");

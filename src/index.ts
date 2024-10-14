@@ -1,5 +1,5 @@
 import { access, mkdir, unlink } from "node:fs/promises";
-import { createBot, Intents, type Message } from "discordeno";
+import { createBot, Intents, type Message } from "npm:discordeno";
 
 import { type Item, log, type SocialMedia, type Task } from "./util.ts";
 import { extractInstagramContent } from "./instagram.ts";
@@ -7,7 +7,6 @@ import { extractTiktokContent } from "./tiktok.ts";
 import { extractYoutubeContent } from "./youtube.ts";
 import { sendSingleVideo } from "./send_single_video.ts";
 import { sendSlideshow } from "./send_slideshow.ts";
-import process from "node:process";
 
 console.info("Check log.txt for unexpected events and errors.");
 console.info("Feedback and bug reports: https://github.com/voltflake/video-bot/issues/new");
@@ -15,7 +14,7 @@ console.info("Feedback and bug reports: https://github.com/voltflake/video-bot/i
 const bot_token = Deno.env.get("DISCORD_TOKEN");
 if (!bot_token) {
   log("CRITICAL", "Discord bot token does not exist. Exiting...");
-  process.exit(1);
+  Deno.exit(1);
 }
 
 const bot = createBot({
@@ -38,10 +37,10 @@ const bot = createBot({
 });
 
 // Graceful shutdown.
-process.on("SIGINT", async () => {
+Deno.addSignalListener("SIGINT", async () => {
   console.info("Shutting down, please wait...");
   await bot.shutdown();
-  process.exit(0);
+  Deno.exit();
 });
 
 // Let bot owner know it's working.

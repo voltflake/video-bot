@@ -1,8 +1,7 @@
 {
   "version": "4",
   "specifiers": {
-    "npm:discordeno@^19.0.0-next.76ad81d": "19.0.0-next.76ad81d",
-    "npm:typescript@^5.6.3": "5.6.3"
+    "npm:discordeno@*": "19.0.0-next.76ad81d"
   },
   "npm": {
     "@discordeno/bot@19.0.0-next.76ad81d": {
@@ -99,10 +98,5 @@
     "yocto-queue@1.1.1": {
       "integrity": "sha512-b4JR1PFR10y1mKjhHY9LaGo6tmrgjit7hxVIeAmyMw3jegXR4dhYqLaQF5zMXZxY7tLpMyJeLjr1C4rLmkVe8g=="
     }
-  },
-  "workspace": {
-    "dependencies": [
-      "npm:discordeno@^19.0.0-next.76ad81d"
-    ]
   }
 }
