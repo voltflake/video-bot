@@ -3,3 +3,4 @@ node_modules
 ignore
 videos
 logs
+.vscode
