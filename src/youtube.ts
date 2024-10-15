@@ -1,4 +1,3 @@
-import process from "node:process";
 import { getContentLength, type Item, log } from "./util.ts";
 
 export async function extractYoutubeContent(url: string): Promise<Item[] | undefined> {
@@ -14,7 +13,7 @@ export async function extractYoutubeContent(url: string): Promise<Item[] | undef
 
 // https://rapidapi.com/ytjar/api/yt-api
 async function ytapi(url: string): Promise<Item[] | undefined> {
-    const key = process.env["RAPIDAPI_KEY"];
+    const key = Deno.env.get("RAPIDAPI_KEY");
     if (!key) {
         log("CRITICAL", "ytapi: RapidAPI key is not provided. Check bot configuration.");
         return undefined;

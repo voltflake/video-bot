@@ -28,14 +28,14 @@ export async function sendSingleVideo(task: Task, item: Item, bot: Bot): Promise
             return undefined;
         }
 
-        if (video.size > 25 * 1024 * 1024) {
+        if (video.byteLength > 25 * 1024 * 1024) {
             log("CRITICAL", "Failed to compress video enough to fit into discord limits.");
             return undefined;
         }
 
         try {
             await bot.helpers.sendMessage(task.message.channelId, {
-                files: [{ blob: video, name: "video.mp4" }],
+                files: [{ blob: new Blob([video]), name: "video.mp4" }],
                 messageReference: { messageId: task.message.id, failIfNotExists: true },
                 allowedMentions: { repliedUser: false },
             });
@@ -62,7 +62,7 @@ export async function sendSingleVideo(task: Task, item: Item, bot: Bot): Promise
 
     try {
         await bot.helpers.sendMessage(task.message.channelId, {
-            files: [{ blob: video, name: "video.mp4" }],
+            files: [{ blob: new Blob([video]), name: "video.mp4" }],
             messageReference: { messageId: task.message.id, failIfNotExists: true },
             allowedMentions: { repliedUser: false },
         });
@@ -82,9 +82,9 @@ export async function sendSingleVideo(task: Task, item: Item, bot: Bot): Promise
     }
 }
 
-async function downloadVideo(url: string): Promise<Blob | undefined> {
+async function downloadVideo(url: string): Promise<Uint8Array | undefined> {
     try {
-        return await (await fetch(url)).blob();
+        return await (await fetch(url)).bytes();
     } catch {
         log("CRITICAL", "Failed to download video from url.");
     }

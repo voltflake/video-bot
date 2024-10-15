@@ -1,7 +1,6 @@
 import type { Message } from "npm:discordeno";
 import { log } from "./util.ts";
-import { readFile, unlink } from "node:fs/promises";
-import { Buffer } from "node:buffer";
+import { encodeBase64 } from "jsr:@std/encoding/base64";
 
 export async function convertToProperCodec(path_to_audio_file: string): Promise<string | undefined> {
     try {
@@ -31,7 +30,7 @@ export async function getAudioData(path_to_audio_file: string): Promise<{ durati
         return undefined;
     }
 
-    const data = Array.from(await readFile(`${path_to_audio_file}.raw`));
+    const data = Array.from(await Deno.readFile(`${path_to_audio_file}.raw`));
     const duration = data.length / 1000;
     let waveform_samples = 1 + Math.floor(data.length / 100);
     if (waveform_samples > 256) {
@@ -50,7 +49,7 @@ export async function getAudioData(path_to_audio_file: string): Promise<{ durati
         waveform[i] = volume(element);
     }
 
-    await unlink(`${path_to_audio_file}.raw`);
+    await Deno.remove(`${path_to_audio_file}.raw`);
 
     return { duration: duration, waveform: waveform };
 }
@@ -64,7 +63,7 @@ function volume(byte: number): number {
 
 // NOTE: temporary workaround until discordeno properly supports voice messages
 export async function sendVoiceMessage(channel_id: bigint, path_to_audio_file: string, waveform: Uint8Array, duration: number): Promise<Message | undefined> {
-    const data = await readFile(path_to_audio_file);
+    const data = await Deno.readFile(path_to_audio_file);
     const form = new FormData();
     form.append("files[0]", new Blob([data], { type: "audio/ogg" }), "song.ogg");
 
@@ -74,7 +73,7 @@ export async function sendVoiceMessage(channel_id: bigint, path_to_audio_file: s
                 id: "0",
                 filename: "song.ogg",
                 duration_secs: duration,
-                waveform: Buffer.from(waveform).toString("base64"),
+                waveform: encodeBase64(waveform),
             },
         ],
         flags: 1 << 13, // IS_VOICE_MESSAGE

@@ -1,4 +1,3 @@
-import { access, mkdir, unlink } from "node:fs/promises";
 import { createBot, Intents, type Message } from "npm:discordeno";
 
 import { type Item, log, type SocialMedia, type Task } from "./util.ts";
@@ -51,13 +50,13 @@ bot.events.ready = (payload): void => {
 bot.events.messageCreate = handleMessage;
 
 try {
-    await access("videos");
+    await Deno.lstat("videos");
 } catch {
-    await mkdir("videos");
+    await Deno.mkdir("videos");
 }
 
 try {
-    await unlink("videos/compressing.lock");
+    await Deno.remove("videos/compressing.lock");
 } catch {
     // File most likely didn't exist.
 }

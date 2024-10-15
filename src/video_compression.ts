@@ -1,27 +1,26 @@
-import { access, constants, readFile, unlink, writeFile } from "node:fs/promises";
 import { log } from "./util.ts";
 
-export async function compressVideo(data: Blob): Promise<Blob | undefined> {
+export async function compressVideo(data: Uint8Array): Promise<Uint8Array | undefined> {
     // Locking mechanism to allow only one compression job at a time.
     const filename_lock = "./videos/compressing.lock";
 
     log("INFO", `video compression: Started waiting for lock. Time: ${Date.now()}`);
     while (true) {
         try {
-            await access(filename_lock, constants.F_OK);
+            await Deno.lstat(filename_lock);
             await new Promise((resolve) => setTimeout(resolve, 1000));
         } catch {
             break;
         }
     }
-    await writeFile(filename_lock, "");
+    await Deno.create(filename_lock);
     log("INFO", `video compression: Lock aquired. Time: ${Date.now()}`);
 
     const timestamp = Date.now();
     const filename = `./videos/${timestamp}.mp4`;
     const filename_compressed = `./videos/${timestamp}_compressed.mp4`;
 
-    await writeFile(filename, await data.bytes());
+    await Deno.writeFile(filename, data);
     const original_info = await ffprobe(filename);
     if (!original_info) {
         return undefined;
@@ -47,12 +46,12 @@ export async function compressVideo(data: Blob): Promise<Blob | undefined> {
         const { code } = await command.output();
         if (code !== 0) {
             log("CRITICAL", `ffmpeg failed when compressing video to lower it's size. filename: ${filename} Args: ${ffmpeg_args.join(" ")}`);
-            await unlink(filename_lock);
+            await Deno.remove(filename_lock);
             return undefined;
         }
     } catch {
         log("CRITICAL", 'Spawning "ffprobe" process failed.');
-        await unlink(filename_lock);
+        await Deno.remove(filename_lock);
         return undefined;
     }
 
@@ -61,11 +60,11 @@ export async function compressVideo(data: Blob): Promise<Blob | undefined> {
         return undefined;
     }
 
-    const compressed_video = new Blob([await readFile(filename_compressed, { encoding: "binary" })]);
+    const compressed_video = await Deno.readFile(filename_compressed);
 
     // Comment this section to keep temporary files after compression for testing.
-    await unlink(filename);
-    await unlink(filename_compressed);
+    await Deno.remove(filename);
+    await Deno.remove(filename_compressed);
 
     // Telemetry to help pick better compression settings for each codec in future.
     const cbr_bitrate_error_percentage = compressed_info.video_bitrate / (required_video_bitrate * 0.01) - 100;
@@ -76,19 +75,19 @@ export async function compressVideo(data: Blob): Promise<Blob | undefined> {
     }
     log("INFO", `ffmpeg info: ${ffmpeg_args}`);
     log("INFO", `video duration: ${video_duration.toFixed(2)}s`);
-    log("INFO", `original file size: ${(data.size / (1024 * 1024)).toFixed(2)}MB`);
+    log("INFO", `original file size: ${(data.byteLength / (1024 * 1024)).toFixed(2)}MB`);
     log("INFO", `original video stream: bitrate=${original_info.video_bitrate} `);
     log("INFO", `size=${calcSize(original_info.video_bitrate).toFixed(2)}MB`);
     log("INFO", `original audio stream: bitrate=${original_info.audio_bitrate} `);
     log("INFO", `size=${calcSize(original_info.audio_bitrate).toFixed(2)}MB`);
-    log("INFO", `resulted file size: ${(compressed_video.size / (1024 * 1024)).toFixed(2)}MB`);
+    log("INFO", `resulted file size: ${(compressed_video.byteLength / (1024 * 1024)).toFixed(2)}MB`);
     log("INFO", `resulted video stream: bitrate=${compressed_info.video_bitrate} `);
     log("INFO", `size=${calcSize(compressed_info.video_bitrate).toFixed(2)}MB`);
     log("INFO", `resulted audio stream: bitrate=${compressed_info.audio_bitrate} `);
     log("INFO", `size=${calcSize(compressed_info.audio_bitrate).toFixed(2)}MB`);
     log("INFO", `ffmpeg cbr error: ${cbr_bitrate_error_percentage.toFixed(2)}%`);
 
-    await unlink(filename_lock);
+    await Deno.remove(filename_lock);
     return compressed_video;
 }
 

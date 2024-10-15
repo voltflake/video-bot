@@ -1,5 +1,3 @@
-import { readdir, unlink, writeFile } from "node:fs/promises";
-
 import { type Item, log } from "./util.ts";
 
 // WARNING: h264_v4l2m2m encoder on rpi4 can fail on bigger resolutions
@@ -26,11 +24,11 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array | 
             image_count += 1;
             // TODO: Do not assume all pictures are .png files.
             image_filenames.push(`./videos/${timestamp}-image${index}.png`);
-            await writeFile(`./videos/${timestamp}-image${index}.png}`, data);
+            await Deno.writeFile(`./videos/${timestamp}-image${index}.png}`, data);
         }
         if (item.type === "audio") {
             audio_filename = `./videos/${timestamp}-audio.mp3`;
-            await writeFile(audio_filename, data);
+            await Deno.writeFile(audio_filename, data);
         }
     }
 
@@ -217,10 +215,9 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array | 
     const result = await Deno.readFile(`./videos/${timestamp}-output-swipe.mp4`);
 
     // cleanup temp files
-    const files = await readdir("./videos");
-    for (const file of files) {
-        if (`./videos/${file}`.startsWith(`./videos/${timestamp}`)) {
-            await unlink(`./videos/${file}`);
+    for await (const dirEntry of Deno.readDir("videos")) {
+        if (dirEntry.name.includes(`${timestamp}`)) {
+            await Deno.remove(`videos/${dirEntry.name}`);
         }
     }
 

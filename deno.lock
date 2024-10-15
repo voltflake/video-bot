@@ -1,7 +1,13 @@
 {
   "version": "4",
   "specifiers": {
+    "jsr:@std/encoding@*": "1.0.5",
     "npm:discordeno@*": "19.0.0-next.76ad81d"
+  },
+  "jsr": {
+    "@std/encoding@1.0.5": {
+      "integrity": "ecf363d4fc25bd85bd915ff6733a7e79b67e0e7806334af15f4645c569fefc04"
+    }
   },
   "npm": {
     "@discordeno/bot@19.0.0-next.76ad81d": {
