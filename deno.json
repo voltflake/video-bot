@@ -21,11 +21,11 @@
 		"strictPropertyInitialization": true,
 		"useUnknownInCatchVariables": true
 	},
-  "fmt": {
-    "useTabs": false,
-    "indentWidth": 2,
-    "lineWidth": 200,
-    "semiColons": true,
-    "singleQuote": false
-}
+	"fmt": {
+		"useTabs": false,
+		"indentWidth": 4,
+		"lineWidth": 200,
+		"semiColons": true,
+		"singleQuote": false
+	}
 }
