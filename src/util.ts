@@ -18,7 +18,7 @@ export type Task = {
 
 const encoder = new TextEncoder();
 export function log(level: LogLevel, message: string): void {
-    Deno.writeFileSync("log.txt", encoder.encode(`[${level}] ${message}\n`), { append: true });
+    Deno.writeFileSync("diagnostics.txt", encoder.encode(`[${level}] ${message}\n`), { append: true });
 }
 
 export async function getContentLength(url: string): Promise<number | undefined> {
