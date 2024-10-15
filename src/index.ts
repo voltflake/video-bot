@@ -49,18 +49,6 @@ bot.events.ready = (payload): void => {
 
 bot.events.messageCreate = handleMessage;
 
-try {
-    await Deno.lstat("videos");
-} catch {
-    await Deno.mkdir("videos");
-}
-
-try {
-    await Deno.remove("videos/compressing.lock");
-} catch {
-    // File most likely didn't exist.
-}
-
 // Connect to Gateway and start doing stuff.
 bot.start();
 

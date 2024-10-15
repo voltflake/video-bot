@@ -14,16 +14,18 @@ export async function sendSlideshow(task: Task, items: Item[], bot: Bot): Promis
         return undefined;
     }
 
-    const audio = await (await fetch(audio_item.url)).bytes();
-    const timestamp = Date.now();
-    await Deno.writeFile(`videos/${timestamp}-tiktokaudio.mp3`, audio);
-    const ogg_filename = await convertToProperCodec(`videos/${timestamp}-tiktokaudio.mp3`);
+    const data = await (await fetch(audio_item.url)).bytes();
+    
+    const audio_filename = await Deno.makeTempFile();
+    await Deno.writeFile(audio_filename, data)
+    const ogg_filename = await convertToProperCodec(audio_filename);
     if (!ogg_filename) {
         log("CRITICAL", "Cannot generate slideshow video because convering audio file to OPUS codec failed.");
         return undefined;
     }
-    const audio_data = await getAudioData(ogg_filename);
-    if (!audio_data) {
+
+    const audio_info = await getAudioData(ogg_filename);
+    if (!audio_info) {
         log("CRITICAL", "Failed to extract audio data from provided audio item.");
         return undefined;
     }
@@ -53,7 +55,7 @@ export async function sendSlideshow(task: Task, items: Item[], bot: Bot): Promis
         messageReference: { messageId: task.message.id, failIfNotExists: true },
         allowedMentions: { repliedUser: false },
     });
-    const voice_message = await sendVoiceMessage(task.message.channelId, ogg_filename, audio_data.waveform, audio_data.duration);
+    const voice_message = await sendVoiceMessage(task.message.channelId, ogg_filename, audio_info.waveform, audio_info.duration);
 
     if (!voice_message) {
         log("FAULT", "Failed to send audio preview as discord voice message.");

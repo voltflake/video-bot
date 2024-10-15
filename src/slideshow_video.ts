@@ -13,9 +13,9 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array | 
         codec = prefered_codec;
     }
 
+    const temp_dir = await Deno.makeTempDir();
+
     // download all required assets
-    const timestamp = Date.now();
-    const image_filenames: string[] = [];
     let image_count = 0;
     let audio_filename = "";
     for (const [index, item] of items.entries()) {
@@ -23,21 +23,20 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array | 
         if (item.type === "image") {
             image_count += 1;
             // TODO: Do not assume all pictures are .png files.
-            image_filenames.push(`./videos/${timestamp}-image${index}.png`);
-            await Deno.writeFile(`./videos/${timestamp}-image${index}.png}`, data);
+            await Deno.writeFile(`${temp_dir}/image${index}.png}`, data);
         }
         if (item.type === "audio") {
-            audio_filename = `./videos/${timestamp}-audio.mp3`;
+            audio_filename = `${temp_dir}/-audio.mp3`;
             await Deno.writeFile(audio_filename, data);
         }
     }
 
     // Get image resolutions.
     const image_resolutions: Array<{ width: number; height: number }> = [];
-    for (const filename of image_filenames) {
+    for (let i = 0; i < image_count; i++) {
         let magick_output: string;
         try {
-            const command = new Deno.Command("magick", { args: ["identify", filename] });
+            const command = new Deno.Command("magick", { args: ["identify", `${temp_dir}/image${i + 1}.png`] });
             const { code, stdout } = await command.output();
             magick_output = new TextDecoder().decode(stdout);
             if (code !== 0) {
@@ -68,11 +67,7 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array | 
     // calculate scaling, size and target aspect ratio
     let max_height = 0;
     let max_aspect_ratio = 3;
-    for (const [index, item] of items.entries()) {
-        if (item.type !== "image") {
-            continue;
-        }
-        const resolution = image_resolutions[index];
+    for (const resolution of image_resolutions) {
         if (resolution.height > max_height) {
             max_height = resolution.height;
         }
@@ -100,15 +95,13 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array | 
     }
 
     // scale each image
-    const scaled_image_filenames: string[] = [];
-    for (const [index, image_filename] of image_filenames.entries()) {
-        const output_image_filename = `./videos/${timestamp}-image${index}-scaled.png`;
+    for (let i = 0; i < image_count; i++) {
         // magick convert image1.jpg -resize "1080x1350" -background black -gravity center -extent 1080x1350 output_image2.jpg
         try {
             const command = new Deno.Command("magick", {
                 args: [
                     "convert",
-                    image_filename,
+                    `${temp_dir}/image${i + 1}.png`,
                     "-resize",
                     `"${selected_width}x${max_height}"`,
                     "-background",
@@ -117,7 +110,7 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array | 
                     "center",
                     "-extent",
                     `${selected_width}x${max_height}`,
-                    output_image_filename,
+                    `${temp_dir}/image${i + 1}-scaled.png`,
                 ],
             });
             const { code } = await command.output();
@@ -129,7 +122,6 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array | 
             log("CRITICAL", 'Spawning "magick convert" process failed.');
             return undefined;
         }
-        scaled_image_filenames.push(output_image_filename);
     }
 
     // generate looped slideshow for future final video
@@ -141,7 +133,7 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array | 
     const loop_duration = Math.ceil((slide_duration + transition_duration) * image_count * 60);
     if (image_count === 1) {
         try {
-            const ffmpeg_args = `-loop 1 -framerate 60 -i ${scaled_image_filenames[0]} -c:v ${codec} -pix_fmt yuv420p -r 60 -frames ${loop_duration} videos/${timestamp}-slideshow_loop.mp4`;
+            const ffmpeg_args = `-loop 1 -framerate 60 -i ${temp_dir}/image1-scaled.png -c:v ${codec} -pix_fmt yuv420p -r 60 -frames ${loop_duration} ${temp_dir}/slideshow_loop.mp4`;
             const command = new Deno.Command("ffmpeg", {
                 args: ffmpeg_args.split(" "),
             });
@@ -157,7 +149,7 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array | 
     } else {
         let ffmpeg_command = "ffmpeg";
         for (let i = 0; i < image_count; i++) {
-            ffmpeg_command = ffmpeg_command.concat(` -loop 1 -framerate 60 -i ${scaled_image_filenames[i]}`);
+            ffmpeg_command = ffmpeg_command.concat(` -loop 1 -framerate 60 -i ${temp_dir}/image${i + 1}-scaled.png`);
         }
         ffmpeg_command = ffmpeg_command.concat(` -filter_complex "`);
 
@@ -177,7 +169,7 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array | 
             current_second_input = second_input;
         }
         ffmpeg_command = ffmpeg_command.slice(0, -1);
-        ffmpeg_command = ffmpeg_command.concat(`" -map "[m${current_filter_result}]" -c:v ${codec} -pix_fmt yuv420p -r 60 -frames ${loop_duration} videos/${timestamp}-slideshow_loop.mp4`);
+        ffmpeg_command = ffmpeg_command.concat(`" -map "[m${current_filter_result}]" -c:v ${codec} -pix_fmt yuv420p -r 60 -frames ${loop_duration} ${temp_dir}/slideshow_loop.mp4`);
 
         try {
             const command = new Deno.Command("ffmpeg", {
@@ -196,7 +188,7 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array | 
 
     // create final video with music
     const ffmpeg_command2 =
-        `ffmpeg -hide_banner -stream_loop -1 -i videos/${timestamp}-slideshow_loop.mp4 -i ${audio_filename} -shortest -c:v copy -c:a aac -pix_fmt yuv420p -movflags +faststart videos/${timestamp}-output-swipe.mp4`;
+        `ffmpeg -hide_banner -stream_loop -1 -i ${temp_dir}/slideshow_loop.mp4 -i ${audio_filename} -shortest -c:v copy -c:a aac -pix_fmt yuv420p -movflags +faststart ${temp_dir}/slideshow.mp4`;
 
     try {
         const command = new Deno.Command("ffmpeg", {
@@ -212,14 +204,8 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array | 
         return undefined;
     }
 
-    const result = await Deno.readFile(`./videos/${timestamp}-output-swipe.mp4`);
-
-    // cleanup temp files
-    for await (const dirEntry of Deno.readDir("videos")) {
-        if (dirEntry.name.includes(`${timestamp}`)) {
-            await Deno.remove(`videos/${dirEntry.name}`);
-        }
-    }
+    const result = await Deno.readFile(`${temp_dir}/slideshow.mp4`);
+    await Deno.remove(temp_dir, { recursive: true });
 
     return result;
 }
