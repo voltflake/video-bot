@@ -166,7 +166,7 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
             current_filter_result += 1;
             current_second_input = second_input;
         }
-
+        complex_filter = complex_filter.slice(0, -1);
         ffmpeg_args.push(complex_filter);
         ffmpeg_args.push("-map", `[m${current_filter_result}]`, "-c:v", codec, "-pix_fmt", "yuv420p", "-r", "60", "-frames", `${loop_duration}`, join(temp_dir, "slideshow_loop.mp4"));
 
