@@ -1,33 +1,20 @@
 import type { Message } from "npm:discordeno";
-import { log } from "./util.ts";
 import { encodeBase64 } from "jsr:@std/encoding/base64";
 
-export async function convertToProperCodec(path_to_audio_file: string): Promise<string | undefined> {
-    try {
-        const command = new Deno.Command("ffmpeg", { args: ["-i", path_to_audio_file, "-c:a", "libopus", "-vn", `${path_to_audio_file}.ogg`] });
-        const { code } = await command.output();
-        if (code !== 0) {
-            log("CRITICAL", '"ffmpeg" exited with non 0 code when creating OPUS audio file.');
-            return undefined;
-        }
-    } catch {
-        log("CRITICAL", 'Spawning "ffmpeg" process failed.');
-        return undefined;
+export async function convertToProperCodec(path_to_audio_file: string): Promise<string> {
+    const command = new Deno.Command("ffmpeg", { args: ["-i", path_to_audio_file, "-c:a", "libopus", "-vn", `${path_to_audio_file}.ogg`] });
+    const { code } = await command.output();
+    if (code !== 0) {
+        throw new Error("ffmpeg exited with non 0 code when creating OPUS audio file");
     }
     return `${path_to_audio_file}.ogg`;
 }
 
-export async function getAudioData(path_to_audio_file: string): Promise<{ duration: number; waveform: Uint8Array } | undefined> {
-    try {
-        const command = new Deno.Command("ffmpeg", { args: ["-i", path_to_audio_file, "-f", "u8", "-ac", "1", "-ar", "1000", `${path_to_audio_file}.raw`] });
-        const { code } = await command.output();
-        if (code !== 0) {
-            log("CRITICAL", '"ffmpeg" exited with non 0 code when creating raw audio file.');
-            return undefined;
-        }
-    } catch {
-        log("CRITICAL", 'Spawning "ffmpeg" process failed.');
-        return undefined;
+export async function getAudioData(path_to_audio_file: string): Promise<{ duration: number; waveform: Uint8Array }> {
+    const command = new Deno.Command("ffmpeg", { args: ["-i", path_to_audio_file, "-f", "u8", "-ac", "1", "-ar", "1000", `${path_to_audio_file}.raw`] });
+    const { code } = await command.output();
+    if (code !== 0) {
+        throw new Error("ffmpeg exited with non 0 code when creating raw audio file");
     }
 
     const data = Array.from(await Deno.readFile(`${path_to_audio_file}.raw`));
@@ -43,13 +30,16 @@ export async function getAudioData(path_to_audio_file: string): Promise<{ durati
     for (let i = 0; i < waveform_samples; i++) {
         const element = data[i * sample_length];
         if (!element) {
-            log("CRITICAL", "Error when parsing raw waveform.");
-            return undefined;
+            throw new Error("Error when parsing raw waveform");
         }
         waveform[i] = volume(element);
     }
 
-    await Deno.remove(`${path_to_audio_file}.raw`);
+    try {
+        await Deno.remove(`${path_to_audio_file}.raw`);
+    } catch {
+        console.error("Failed to remove temporary raw audio file");
+    }
 
     return { duration: duration, waveform: waveform };
 }
@@ -62,7 +52,7 @@ function volume(byte: number): number {
 }
 
 // NOTE: temporary workaround until discordeno properly supports voice messages
-export async function sendVoiceMessage(channel_id: bigint, path_to_audio_file: string, waveform: Uint8Array, duration: number): Promise<Message | undefined> {
+export async function sendVoiceMessage(channel_id: bigint, path_to_audio_file: string, waveform: Uint8Array, duration: number): Promise<Message> {
     const data = await Deno.readFile(path_to_audio_file);
     const form = new FormData();
     form.append("files[0]", new Blob([data], { type: "audio/ogg" }), "song.ogg");
@@ -83,8 +73,7 @@ export async function sendVoiceMessage(channel_id: bigint, path_to_audio_file: s
 
     const bot_key = Deno.env.get("DISCORD_TOKEN");
     if (!bot_key) {
-        log("CRITICAL", "DISCORD_TOKEN is not in enviroment.");
-        return undefined;
+        throw new Error("DISCORD_TOKEN is not in enviroment");
     }
 
     // Send voice message
@@ -96,9 +85,10 @@ export async function sendVoiceMessage(channel_id: bigint, path_to_audio_file: s
         body: form,
     });
 
-    if (response.status !== 200) {
-        log("CRITICAL", "Failed to send voice message to discord.");
-        return undefined;
+    if (!response.ok) {
+        throw new Error("Failed to send voice message to discord");
     }
-    return (await response.json()) as Message;
+    
+    const message: Message = await response.json();
+    return message;
 }

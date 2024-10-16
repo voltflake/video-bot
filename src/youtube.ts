@@ -1,32 +1,43 @@
-import { getContentLength, type Item, log } from "./util.ts";
+import { getContentLength, type Item } from "./util.ts";
 
-export async function extractYoutubeContent(url: string): Promise<Item[] | undefined> {
+export async function extractYoutubeContent(url: string): Promise<Item[]> {
     for (let i = 0; i < 3; i++) {
-        const result = await ytapi(url);
-        if (result) {
-            return result;
+        try {
+            return await ytapi(url);
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                console.error("ytapi() failed. Stack trace -->");
+                console.error(error.stack);
+            } else {
+                throw new Error("unreachable");
+            }
         }
-        log("CRITICAL", "ytapi failed.");
     }
-    return undefined;
+    throw new Error("All YouTube APIs failed");
 }
 
+type YtapiResponse = {
+    status: string;
+    formats: {
+        itag: number;
+        url: string;
+    }[];
+};
+
 // https://rapidapi.com/ytjar/api/yt-api
-async function ytapi(url: string): Promise<Item[] | undefined> {
+async function ytapi(url: string): Promise<Item[]> {
     const key = Deno.env.get("RAPIDAPI_KEY");
     if (!key) {
-        log("CRITICAL", "ytapi: RapidAPI key is not provided. Check bot configuration.");
-        return undefined;
+        throw new Error("RapidAPI key not found");
     }
 
-    const target_id = url.match(/[a-zA-Z0-9]{11}/);
-    if (!target_id) {
-        log("CRITICAL", "ytapi: failed to extract video ID from URL.");
-        return undefined;
+    const video_id = url.match(/[a-zA-Z0-9]{11}/);
+    if (!video_id) {
+        throw new Error("Failed to extract video ID from URL");
     }
 
     const urlParams = {
-        id: target_id[0],
+        id: video_id[0],
     };
     const urlParamsStr = new URLSearchParams(urlParams).toString();
     const apiUrl = `https://yt-api.p.rapidapi.com/dl?${urlParamsStr}`;
@@ -38,49 +49,29 @@ async function ytapi(url: string): Promise<Item[] | undefined> {
         },
     };
 
-    let json: {
-        status: string;
-        formats: {
-            itag: number;
-            url: string;
-        }[];
-    };
-
-    try {
-        const response = await fetch(apiUrl, options);
-        json = await response.json();
-    } catch {
-        log("CRITICAL", "ytapi: API request failed.");
-        return undefined;
-    }
+    const response = await fetch(apiUrl, options);
+    const json: YtapiResponse = await response.json();
 
     if (json.status !== "OK") {
-        log("CRITICAL", `ytapi: API returned an error: ${json.status}. URL: ${url}`);
-        return undefined;
+        throw new Error(`API returned an error: ${json.status}. URL: ${url}`);
     }
 
     let formats_string = "";
     for (const [index, format] of json.formats.entries()) {
         formats_string += `${format.itag}${index === json.formats.length - 1 ? "" : ","}`;
     }
-    log("INFO", `ytapi: found ${json.formats.length} formats for ${url} These formats are: ${formats_string}`);
+    console.info(`ytapi: found ${json.formats.length} formats for ${url}`);
+    console.info(`These formats are: ${formats_string}`);
 
     // default video
-    let result: undefined | Item[];
     for (const format of json.formats) {
-        const size = await getContentLength(format.url);
-        if (!size) {
-            log("FAULT", "ytapi: failed to validate format (mp4 video url).");
-            continue;
+        try {
+            const size = await getContentLength(format.url);
+            return [{ type: "video", url: format.url, size: size }];
+        } catch {
+            console.error("ytapi: failed to validate format (mp4 video url)");
         }
-        result = [{ type: "video", url: format.url, size: size }];
-        break;
     }
 
-    if (!result) {
-        log("CRITICAL", "ytapi: failed to find working format.");
-        return undefined;
-    }
-
-    return result;
+    throw new Error("Failed to find working format");
 }

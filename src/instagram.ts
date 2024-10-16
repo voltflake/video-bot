@@ -1,25 +1,47 @@
-import { getContentLength, type Item, log } from "./util.ts";
+import { getContentLength, type Item } from "./util.ts";
 
-export async function extractInstagramContent(url: string): Promise<Item[] | undefined> {
-    const result = await rocketapi(url);
-    if (result) {
-        return result;
+export async function extractInstagramContent(url: string): Promise<Item[]> {
+    try {
+        return await rocketapi(url);
+    } catch (error: unknown) {
+        if (error instanceof Error) {
+            console.error("rocketapi() failed. Stack trace -->");
+            console.error(error.stack);
+        } else {
+            throw new Error("unreachable");
+        }
     }
-    log("CRITICAL", "rocketapi failed.");
-    return undefined;
+    throw new Error("All Instagram APIs failed");
 }
 
-async function rocketapi(url: string): Promise<Item[] | undefined> {
+type RocketapiResponse = {
+    response: {
+        body: {
+            items: {
+                image_versions2: { candidates: { url: string }[] };
+                video_versions: { url: string }[];
+                music_metadata: { music_info: { music_asset_info: { progressive_download_url: string } } };
+                code: number;
+                product_type: "carousel_container" | "feed" | "clips";
+                carousel_media: {
+                    media_type: number;
+                    image_versions2: { candidates: { url: string }[] };
+                    video_versions: { url: string }[];
+                }[];
+            }[];
+        };
+    };
+};
+
+async function rocketapi(url: string): Promise<Item[]> {
     const key = Deno.env.get("RAPIDAPI_KEY");
     if (!key) {
-        log("CRITICAL", "rocketapi: RapidAPI key is not provided. Check bot configuration.");
-        return undefined;
+        throw new Error("RapidAPI key not found");
     }
 
     const shortcode = url.match(/(?<=instagram.com\/(p|reel)\/)[^/]+/);
     if (!shortcode) {
-        log("CRITICAL", "rocketapi: failed to extract shortcode from URL.");
-        return undefined;
+        throw new Error("Failed to extract shortcode from URL");
     }
 
     const apiUrl = "https://rocketapi-for-instagram.p.rapidapi.com/instagram/media/get_info_by_shortcode";
@@ -35,143 +57,79 @@ async function rocketapi(url: string): Promise<Item[] | undefined> {
         }),
     };
 
-    let json: {
-        response: {
-            body: {
-                items: {
-                    image_versions2: { candidates: { url: string }[] };
-                    video_versions: { url: string }[];
-                    music_metadata: { music_info: { music_asset_info: { progressive_download_url: string } } };
-                    code: number;
-                    product_type: "carousel_container" | "feed" | "clips";
-                    carousel_media: {
-                        media_type: number;
-                        image_versions2: { candidates: { url: string }[] };
-                        video_versions: { url: string }[];
-                    }[];
-                }[];
-            };
-        };
-    };
-
-    try {
-        const response = await fetch(apiUrl, options);
-        json = await response.json();
-    } catch {
-        log("CRITICAL", "rocketapi: API fetch() request failed.");
-        return undefined;
-    }
+    const response = await fetch(apiUrl, options);
+    const json: RocketapiResponse = await response.json();
 
     const info = json.response.body.items[0];
-    switch (info.product_type) {
-        case "carousel_container": {
-            return handleCarouselCase(info);
-        }
-        case "feed": {
-            return handleFeedCase(info);
-        }
-        case "clips": {
-            return handleClipsCase(info);
-        }
-        default: {
-            log("CRITICAL", "rocketapi: encountered unknown product_type.");
-        }
+    if (info.product_type === "carousel_container") {
+        return handleCarouselCase(info);
     }
+    if (info.product_type === "feed") {
+        return handleFeedCase(info);
+    }
+    if (info.product_type === "clips") {
+        return handleClipsCase(info);
+    }
+    throw new Error(`Encountered unknown product_type. type: ${info.product_type} shortcode: ${info.code}`);
+}
+// Post with multiple items.
+async function handleCarouselCase(info: RocketapiResponse["response"]["body"]["items"][number]): Promise<Item[]> {
+    const result: Item[] = [];
 
-    return undefined;
-
-    // Post with multiple items.
-    async function handleCarouselCase(info: (typeof json.response.body.items)[number]): Promise<Item[] | undefined> {
-        const result: Item[] = [];
-
-        // Add items from post to result.
-        for (const item of info.carousel_media) {
-            switch (item.media_type) {
-                // Item is an image.
-                case 1: {
-                    const url = item.image_versions2.candidates[0].url;
-                    const size = await getContentLength(url);
-                    if (!size) {
-                        log("FAULT", "rocketapi: failed to validate image item from carousel.");
-                        continue;
-                    }
-                    result.push({ type: "image", url: url, size: size });
-                    continue;
-                }
-                // Item is a video.
-                case 2: {
-                    const url = item.video_versions[0].url;
-                    const size = await getContentLength(url);
-                    if (!size) {
-                        log("FAULT", "rocketapi: failed to validate video item from carousel.");
-                        continue;
-                    }
-                    result.push({ type: "video", url: url, size: size });
-                    continue;
-                }
-                default: {
-                    log("FAULT", `rocketapi: Unknown media type in instagram carousel. Number: ${item.media_type}, shortcode is: ${info.code}`);
-                    continue;
-                }
-            }
-        }
-
-        // Add music from post, if it's provided.
-        if (info.music_metadata.music_info) {
-            if (
-                result.find((item) => {
-                    return item.type === "video";
-                })
-            ) {
-                log("INFO", `rocketapi: Music item was provided in carousel post with video item. Shortcode is: ${info.code}`);
-            }
-            const url = info.music_metadata.music_info.music_asset_info.progressive_download_url;
+    // Add items from post to result.
+    for (const item of info.carousel_media) {
+        // Item is an image.
+        if (item.media_type === 1) {
+            const url = item.image_versions2.candidates[0].url;
             const size = await getContentLength(url);
-            if (size) {
-                result.push({ type: "audio", url: url, size: size });
-            } else {
-                log("FAULT", "rocketapi: failed to validate audio item from carousel post.");
-            }
+            result.push({ type: "image", url: url, size: size });
+            continue;
         }
-
-        return result;
-    }
-
-    // Post with single photo. With or without music.
-    async function handleFeedCase(info: (typeof json.response.body.items)[number]): Promise<Item[] | undefined> {
-        const result: Item[] = [];
-
-        // Add image to result.
-        const url = info.image_versions2.candidates[0].url;
-        const size = await getContentLength(url);
-        if (!size) {
-            log("CRITICAL", "rocketapi: failed to validate image item from single image post.");
-            return undefined;
-        }
-        result.push({ type: "image", url: url, size: size });
-
-        // Add music to result, if it's provided.
-        if (info.music_metadata.music_info) {
-            const url = info.music_metadata.music_info.music_asset_info.progressive_download_url;
+        // Item is an video.
+        if (item.media_type === 2) {
+            const url = item.video_versions[0].url;
             const size = await getContentLength(url);
-            if (size) {
-                result.push({ type: "audio", url: url, size: size });
-            } else {
-                log("CRITICAL", "rocketapi: failed to validate audio item from single image post.");
-            }
+            result.push({ type: "video", url: url, size: size });
+            continue;
         }
-
-        return result;
+        throw new Error(`encountered unknown media_type. code: ${item.media_type} shortcode: ${info.code}`);
     }
 
-    // Post with a single video. (reel)
-    async function handleClipsCase(info: (typeof json.response.body.items)[number]): Promise<Item[] | undefined> {
-        const url = info.video_versions[0].url;
+    // Add music from post, if it's provided.
+    if (info.music_metadata.music_info) {
+        if (result.find((item) => item.type === "video")) {
+            console.error(`rocketapi: music item was provided in carousel post with video item. Shortcode is: ${info.code}`);
+        }
+        const url = info.music_metadata.music_info.music_asset_info.progressive_download_url;
         const size = await getContentLength(url);
-        if (!size) {
-            log("CRITICAL", "rocketapi: failed to validate video item from single video post.");
-            return undefined;
-        }
-        return [{ type: "video", url: url, size: size }];
+        result.push({ type: "audio", url: url, size: size });
     }
+
+    return result;
+}
+
+// Post with single photo. With or without music.
+async function handleFeedCase(info: RocketapiResponse["response"]["body"]["items"][number]): Promise<Item[]> {
+    const result: Item[] = [];
+
+    // Add image to result.
+    const url = info.image_versions2.candidates[0].url;
+    const size = await getContentLength(url);
+    result.push({ type: "image", url: url, size: size });
+
+    // Add music to result, if it's provided.
+    if (info.music_metadata.music_info) {
+        const url = info.music_metadata.music_info.music_asset_info.progressive_download_url;
+        const size = await getContentLength(url);
+        result.push({ type: "audio", url: url, size: size });
+    }
+
+    return result;
+}
+
+// Post with a single video. (reel)
+async function handleClipsCase(info: RocketapiResponse["response"]["body"]["items"][number]): Promise<Item[]> {
+    const url = info.video_versions[0].url;
+    const size = await getContentLength(url);
+    return [{ type: "video", url: url, size: size }];
 }

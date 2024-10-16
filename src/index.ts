@@ -1,18 +1,17 @@
-import { createBot, Intents, type Message } from "npm:discordeno";
+import { createBot, Intents, type Message, type User } from "npm:discordeno";
 
-import { type Item, log, type SocialMedia, type Task } from "./util.ts";
+import type { Item, SocialMedia, Task } from "./util.ts";
 import { extractInstagramContent } from "./instagram.ts";
 import { extractTiktokContent } from "./tiktok.ts";
 import { extractYoutubeContent } from "./youtube.ts";
 import { sendSingleVideo } from "./send_single_video.ts";
 import { sendSlideshow } from "./send_slideshow.ts";
 
-console.info("Check log.txt for unexpected events and errors.");
 console.info("Feedback and bug reports: https://github.com/voltflake/video-bot/issues/new");
 
 const bot_token = Deno.env.get("DISCORD_TOKEN");
 if (!bot_token) {
-    log("CRITICAL", "Discord bot token does not exist. Exiting...");
+    console.error("Discord bot token does not exist. Exiting...");
     Deno.exit(1);
 }
 
@@ -43,7 +42,7 @@ Deno.addSignalListener("SIGINT", async () => {
 });
 
 // Let bot owner know it's working.
-bot.events.ready = (payload): void => {
+bot.events.ready = (payload: { user: User }): void => {
     console.info(`Logged in as ${payload.user.tag}`);
 };
 
@@ -92,38 +91,32 @@ async function processTask(task: Task): Promise<void> {
 
     // Complex case. Send Photos & Videos.
     if (items.length > 1 && !audio) {
+        // TODO: implement this.
         // await sendGallery(task, items, bot);
-        return;
+        // return;
     }
 
     let items_string = "";
     for (const [index, item] of items.entries()) {
         items_string += `${item.type}${index === items.length - 1 ? "" : ","}`;
     }
-    log("CRITICAL", `Unreachable code reached in when deciding how to represent content in Discord. Items are: ${items_string}`);
+    console.error("unreachable code reached in when deciding how to represent content in Discord");
+    console.error(`Skipping task. Items are: ${items_string}`);
 }
 
-async function extractItems(task: Task): Promise<Item[] | undefined> {
-    let result: undefined | Item[];
+async function extractItems(task: Task): Promise<Item[]> {
     switch (task.type) {
         case "YouTube":
         case "YouTubeShorts": {
-            result = await extractYoutubeContent(task.url);
-            break;
+            return await extractYoutubeContent(task.url);
         }
         case "Instagram": {
-            result = await extractInstagramContent(task.url);
-            break;
+            return await extractInstagramContent(task.url);
         }
         case "TikTok": {
-            result = await extractTiktokContent(task.url);
-            break;
+            return await extractTiktokContent(task.url);
         }
     }
-    if (!result) {
-        return undefined;
-    }
-    return result;
 }
 
 function findTask(message: Message): Task | undefined {
@@ -145,6 +138,7 @@ function findTask(message: Message): Task | undefined {
             return { message: message, url: url.href, type: type };
         }
     }
+
     return undefined;
 
     function extractURLs(text: string): URL[] {

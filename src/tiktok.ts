@@ -1,20 +1,29 @@
-import { getContentLength, type Item, log } from "./util.ts";
+import { getContentLength, type Item } from "./util.ts";
 
-export async function extractTiktokContent(url: string): Promise<Item[] | undefined> {
-    const result = await tiktokscraper7(url);
-    if (result) {
-        return result;
+export async function extractTiktokContent(url: string): Promise<Item[]> {
+    try {
+        return await tiktokscraper7(url);
+    } catch (error: unknown) {
+        if (error instanceof Error) {
+            console.error("tiktokscraper7() failed. Stack trace -->");
+            console.error(error.stack);
+        } else {
+            throw new Error("unreachable");
+        }
     }
-    log("CRITICAL", "tiktokscraper7 failed.");
-    return undefined;
+    throw new Error("All TikTok APIs failed");
 }
 
+type Tiktokscraper7Response = {
+    msg: string;
+    data: { play: string; wmplay: string; images: string[] };
+};
+
 // https://rapidapi.com/tikwm-tikwm-default/api/tiktok-scraper7
-async function tiktokscraper7(url: string): Promise<Item[] | undefined> {
+async function tiktokscraper7(url: string): Promise<Item[]> {
     const key = Deno.env.get("RAPIDAPI_KEY");
-    if (key == null) {
-        log("CRITICAL", "tiktokscraper7: RapidAPI key is not provided. Check bot configuration.");
-        return undefined;
+    if (!key) {
+        throw new Error("RapidAPI key not found");
     }
 
     const urlParams = {
@@ -31,60 +40,52 @@ async function tiktokscraper7(url: string): Promise<Item[] | undefined> {
         },
     };
 
-    let json: { msg: string; data: { play: string; wmplay: string; images: string[] } };
-    try {
-        const response = await fetch(apiUrl, options);
-        json = await response.json();
-    } catch {
-        log("CRITICAL", "tiktokscraper7: API fetch() request failed.");
-        return undefined;
-    }
+    const response = await fetch(apiUrl, options);
+    const json: Tiktokscraper7Response = await response.json();
 
     // Probably a live video or a bad link
     if (json.msg !== "success") {
-        log("CRITICAL", `tiktokscraper7: API returned an error: ${json.msg}. URL: ${url}`);
-        return undefined;
+        throw new Error(`API returned an error: ${json.msg}. URL: ${url}`);
     }
 
     // Default video
     if (!json.data.images) {
-        let size = await getContentLength(json.data.play);
-        if (size) {
+        try {
+            const size = await getContentLength(json.data.play);
             return [{ type: "video", url: json.data.play, size: size }];
+        } catch {
+            console.error(`tiktokscraper7: failed to validate "play" variant`);
         }
 
-        log("FAULT", `tiktokscraper7: default "play" format failed. URL: ${json.data.play}`);
-        log("INFO", `tiktokscraper7: Trying "wmplay". URL: ${json.data.wmplay}`);
-
-        size = await getContentLength(json.data.wmplay);
-        if (size) {
+        try {
+            const size = await getContentLength(json.data.wmplay);
             return [{ type: "video", url: json.data.wmplay, size: size }];
+        } catch {
+            console.error(`tiktokscraper7: failed to validate "wmplay" variant`);
         }
 
-        log("CRITICAL", `tiktokscraper7: both "play" and "wmplay" formats failed.`);
-        return undefined;
+        throw new Error("Both play and wmplay variants failed to validate");
     }
 
     // Slideshow post
     if (json.data.images) {
         const result: Item[] = [];
-        const size = await getContentLength(json.data.play);
-        if (!size) {
-            log("CRITICAL", "tiktokscraper7: failed to validate audio item from slideshow post.");
-            return undefined;
+        try {
+            const size = await getContentLength(json.data.play);
+            result.push({ type: "audio", url: json.data.play, size: size });
+        } catch {
+            throw new Error("Failed to validate audio URL from slideshow post");
         }
-        result.push({ type: "audio", url: json.data.play, size: size });
         for (const image_url of json.data.images) {
-            const size = await getContentLength(json.data.wmplay);
-            if (!size) {
-                log("CRITICAL", "tiktokscraper7: failed to validate one of images from slideshow post.");
-                return undefined;
+            try {
+                const size = await getContentLength(json.data.wmplay);
+                result.push({ type: "image", url: image_url, size: size });
+            } catch {
+                throw new Error("Failed to validate one of slideshow post images");
             }
-            result.push({ type: "image", url: image_url, size: size });
         }
         return result;
     }
 
-    log("CRITICAL", "tiktokscraper7: provided URL is not a video nor a slideshow post.");
-    return undefined;
+    throw new Error("Provided URL is not a video nor a slideshow post");
 }

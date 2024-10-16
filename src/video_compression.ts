@@ -1,8 +1,6 @@
-import { log } from "./util.ts";
-
-export async function compressVideo(data: Uint8Array): Promise<Uint8Array | undefined> {
+export async function compressVideo(data: Uint8Array): Promise<Uint8Array> {
     // Locking mechanism to allow only one compression job at a time.
-    log("INFO", `video compression: Started waiting for lock. Time: ${Date.now()}`);
+    console.info(`video compression: Started waiting for lock. Time: ${Date.now()}`);
     while (true) {
         if (Deno.env.has("COMPRESSING_IN_PROCESS")) {
             await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -10,100 +8,77 @@ export async function compressVideo(data: Uint8Array): Promise<Uint8Array | unde
         }
         break;
     }
-    Deno.env.set("COMPRESSING_IN_PROCESS", "");
-    log("INFO", `video compression: Lock aquired. Time: ${Date.now()}`);
-
-    const temp_dir = await Deno.makeTempDir();
-    const filename_original = `${temp_dir}/video.mp4`;
-    const filename_compressed = `${temp_dir}/video_compressed.mp4`;
-
-    await Deno.writeFile(filename_original, data);
-    const original_info = await ffprobe(filename_original);
-    if (!original_info) {
-        return undefined;
-    }
-
-    // 4% reserved for muxing overhead.
-    const available_bits_per_second = (25 * 1024 * 1024 * 8 * 0.96) / original_info.duration_in_seconds;
-
-    // 0.80 is additional space if some video gets over +10% bitrate it was given
-    // Note that Raspberry Pi with h264_omx codec can't hv-encode videos with bitrate less than 150kb/s
-    const required_video_bitrate = Math.floor((available_bits_per_second - original_info.audio_bitrate) * 0.9);
-
-    const ffmpeg_args = ["-i", `${filename_original}`, "-y", "-c:a", "copy", "-b:v", `${required_video_bitrate.toString()}`];
-
-    const prefered_codec = Deno.env.get("CODEC");
-    ffmpeg_args.push("-c:v");
-    if (prefered_codec) {
-        ffmpeg_args.push(prefered_codec);
-    } else {
-        ffmpeg_args.push("libx264");
-    }
-
-    ffmpeg_args.push(filename_compressed);
-
     try {
+        Deno.env.set("COMPRESSING_IN_PROCESS", "");
+        console.info(`video compression: Lock aquired. Time: ${Date.now()}`);
+
+        const temp_dir = await Deno.makeTempDir();
+        const filename_original = `${temp_dir}/video.mp4`;
+        const filename_compressed = `${temp_dir}/video_compressed.mp4`;
+
+        await Deno.writeFile(filename_original, data);
+        const original_info = await ffprobe(filename_original);
+
+        // 4% reserved for muxing overhead.
+        const available_bits_per_second = (25 * 1024 * 1024 * 8 * 0.96) / original_info.duration_in_seconds;
+
+        // 0.80 is additional space if some video gets over +10% bitrate it was given
+        // Note that Raspberry Pi with h264_omx codec can't hv-encode videos with bitrate less than 150kb/s
+        const required_video_bitrate = Math.floor((available_bits_per_second - original_info.audio_bitrate) * 0.9);
+
+        const ffmpeg_args = ["-i", `${filename_original}`, "-y", "-c:a", "copy", "-b:v", `${required_video_bitrate.toString()}`];
+
+        ffmpeg_args.push("-c:v");
+        const prefered_codec = Deno.env.get("CODEC");
+        ffmpeg_args.push(prefered_codec ? prefered_codec : "libx264");
+
+        ffmpeg_args.push(filename_compressed);
+
         const command = new Deno.Command("ffmpeg", { args: ffmpeg_args });
         const { code } = await command.output();
         if (code !== 0) {
-            log("CRITICAL", `ffmpeg failed when compressing video to lower it's size. filename: ${filename_original} Args: ${ffmpeg_args.join(" ")}`);
-            Deno.env.delete("COMPRESSING_IN_PROCESS");
-            return undefined;
+            throw new Error(`ffmpeg failed when compressing video. Non 0 exit code. filename: ${filename_original} Args: ${ffmpeg_args.join(" ")}`);
         }
-    } catch {
-        log("CRITICAL", 'Spawning "ffprobe" process failed.');
+
+        const compressed_info = await ffprobe(filename_compressed);
+        const compressed_video = await Deno.readFile(filename_compressed);
+
+        // Comment this section to keep temporary files after compression for testing.
+        await Deno.remove(temp_dir, { recursive: true });
+
+        // Telemetry to help pick better compression settings for each codec in future.
+        const cbr_bitrate_error_percentage = compressed_info.video_bitrate / (required_video_bitrate * 0.01) - 100;
+        const video_duration = original_info.duration_in_seconds;
+
+        console.info(`ffmpeg info: ${ffmpeg_args}`);
+        console.info(`video duration: ${video_duration.toFixed(2)}s`);
+        console.info(`original file size: ${toMbString(data.byteLength / (1024 * 1024))}`);
+        console.info(`original video stream: bitrate=${original_info.video_bitrate} `);
+        console.info(`size=${toMbString(video_duration * original_info.video_bitrate * 8)}`);
+        console.info(`original audio stream: bitrate=${original_info.audio_bitrate} `);
+        console.info(`size=${toMbString(video_duration * original_info.audio_bitrate * 8)}`);
+        console.info(`resulted file size: ${toMbString(compressed_video.byteLength / (1024 * 1024))}`);
+        console.info(`resulted video stream: bitrate=${compressed_info.video_bitrate} `);
+        console.info(`size=${toMbString(video_duration * compressed_info.video_bitrate * 8)}`);
+        console.info(`resulted audio stream: bitrate=${compressed_info.audio_bitrate} `);
+        console.info(`size=${toMbString(video_duration * compressed_info.audio_bitrate * 8)}`);
+        console.info(`ffmpeg cbr error: ${cbr_bitrate_error_percentage.toFixed(2)}%`);
+        return compressed_video;
+    } finally {
         Deno.env.delete("COMPRESSING_IN_PROCESS");
-        return undefined;
     }
-
-    const compressed_info = await ffprobe(filename_compressed);
-    if (!compressed_info) {
-        return undefined;
-    }
-
-    const compressed_video = await Deno.readFile(filename_compressed);
-
-    // Comment this section to keep temporary files after compression for testing.
-    await Deno.remove(temp_dir, { recursive: true });
-
-    // Telemetry to help pick better compression settings for each codec in future.
-    const cbr_bitrate_error_percentage = compressed_info.video_bitrate / (required_video_bitrate * 0.01) - 100;
-    const bits_in_1MB = 8 * 1024 * 1024;
-    const video_duration = original_info.duration_in_seconds;
-    function calcSize(bitrate: number): number {
-        return (bitrate * video_duration) / bits_in_1MB;
-    }
-    log("INFO", `ffmpeg info: ${ffmpeg_args}`);
-    log("INFO", `video duration: ${video_duration.toFixed(2)}s`);
-    log("INFO", `original file size: ${(data.byteLength / (1024 * 1024)).toFixed(2)}MB`);
-    log("INFO", `original video stream: bitrate=${original_info.video_bitrate} `);
-    log("INFO", `size=${calcSize(original_info.video_bitrate).toFixed(2)}MB`);
-    log("INFO", `original audio stream: bitrate=${original_info.audio_bitrate} `);
-    log("INFO", `size=${calcSize(original_info.audio_bitrate).toFixed(2)}MB`);
-    log("INFO", `resulted file size: ${(compressed_video.byteLength / (1024 * 1024)).toFixed(2)}MB`);
-    log("INFO", `resulted video stream: bitrate=${compressed_info.video_bitrate} `);
-    log("INFO", `size=${calcSize(compressed_info.video_bitrate).toFixed(2)}MB`);
-    log("INFO", `resulted audio stream: bitrate=${compressed_info.audio_bitrate} `);
-    log("INFO", `size=${calcSize(compressed_info.audio_bitrate).toFixed(2)}MB`);
-    log("INFO", `ffmpeg cbr error: ${cbr_bitrate_error_percentage.toFixed(2)}%`);
-
-    Deno.env.delete("COMPRESSING_IN_PROCESS");
-    return compressed_video;
 }
 
-async function ffprobe(filename: string): Promise<{ duration_in_seconds: number; video_bitrate: number; audio_bitrate: number } | undefined> {
-    let ffprobe_output: string;
-    try {
-        const command = new Deno.Command("ffprobe", { args: ["-v", "quiet", "-print_format", "json", "-show_streams", `${filename}`] });
-        const { code, stdout } = await command.output();
-        ffprobe_output = new TextDecoder().decode(stdout);
-        if (code !== 0) {
-            log("CRITICAL", '"ffprobe" exited with non 0 code.');
-            return undefined;
-        }
-    } catch {
-        log("CRITICAL", 'Spawning "ffprobe" process failed.');
-        return undefined;
+function toMbString(bytes: number): string {
+    return `${(bytes / 1024 * 1024).toFixed(2)}MB`;
+}
+
+async function ffprobe(filename: string): Promise<{ duration_in_seconds: number; video_bitrate: number; audio_bitrate: number }> {
+    const command = new Deno.Command("ffprobe", { args: ["-v", "quiet", "-print_format", "json", "-show_streams", `${filename}`] });
+    const { code, stdout } = await command.output();
+    const ffprobe_output = new TextDecoder().decode(stdout);
+    if (code !== 0) {
+        throw new Error("ffprobe exited with non 0 code");
     }
     const data = JSON.parse(ffprobe_output);
     const duration_in_seconds = Number.parseFloat(data.streams[0].duration);

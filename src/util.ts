@@ -16,59 +16,60 @@ export type Task = {
     type: SocialMedia;
 };
 
-const encoder = new TextEncoder();
-export function log(level: LogLevel, message: string): void {
-    Deno.writeFileSync("diagnostics.txt", encoder.encode(`[${level}] ${message}\n`), { append: true });
+// function formatDateTime(date: Date): string {
+//     const pad = (num: number): string => String(num).padStart(2, '0');
+//     const year = date.getFullYear();
+//     const month = pad(date.getMonth() + 1); // Months are zero-based
+//     const day = pad(date.getDate());
+//     const hours = pad(date.getHours());
+//     const minutes = pad(date.getMinutes());
+//     const seconds = pad(date.getSeconds());
+//     const milliseconds = String(date.getMilliseconds()).padStart(3, '0');
+//     return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}.${milliseconds}`;
+// }
+
+// export function log(message: string): void {
+//     try {
+//         const encoder = new TextEncoder();
+//         const data = encoder.encode(`${formatDateTime(new Date())} ${message}\n`);
+//         Deno.writeFileSync("diagnostics.txt", data, { append: true });
+//     } catch {
+//         console.error("Failed to write to diagnostics.txt file.");
+//     }
+// }
+
+export async function getContentLength(url: string): Promise<number> {
+    try {
+        const response = await fetch(url, { method: "HEAD" });
+        if (response.ok) {
+            return extractLength(response.headers);
+        }
+    } catch {
+        console.error("Fault: Failed to extract content-length with HEAD method.");
+    }
+
+    try {
+        const response = await fetch(url, { method: "GET" });
+        if (response.ok) {
+            return extractLength(response.headers);
+        }
+    } catch {
+        console.error("Fault: Failed to extract content-length with GET method.");
+    }
+
+    throw new Error("Failed to get content-length headers. URL might be broken/unavailable.");
 }
 
-export async function getContentLength(url: string): Promise<number | undefined> {
-    let response: undefined | Response;
-    try {
-        response = await fetch(url, { method: "HEAD" });
-    } catch {
-        log("FAULT", `Failed to submit HEAD request to ${url}`);
+function extractLength(headers: Headers): number {
+    let header_value = headers.get("content-length");
+    if (header_value) {
+        return Number.parseInt(header_value);
     }
 
-    let content_length: undefined | number;
-    if (response) {
-        if (response.status === 200) {
-            content_length = extractLength(response.headers);
-            if (content_length) {
-                return content_length;
-            }
-        } else {
-            log("FAULT", `Server responded with non-200 code to HEAD request when fetching for content-length headers. Code: ${response?.status} URL: ${url}`);
-        }
+    header_value = headers.get("Content-Length");
+    if (header_value) {
+        return Number.parseInt(header_value);
     }
 
-    log("INFO", "Switching to GET request...");
-    try {
-        response = await fetch(url, { method: "GET" });
-    } catch {
-        log("FAULT", `Failed to submit GET request to ${url}`);
-        return;
-    }
-
-    if (response.status === 200) {
-        content_length = extractLength(response.headers);
-        if (content_length) {
-            return content_length;
-        }
-    }
-
-    log("CRITICAL", `HEAD and GET requests both failed when fetching for content-length headers. Server responded with code ${response.status} to GET request.`);
-    return;
-
-    function extractLength(headers: Headers): number | undefined {
-        let header_value = headers.get("content-length");
-        if (header_value) {
-            return Number.parseInt(header_value);
-        }
-
-        header_value = headers.get("Content-Length");
-        if (header_value) {
-            return Number.parseInt(header_value);
-        }
-        return undefined;
-    }
+    throw new Error("No content-length headers were found.");
 }
