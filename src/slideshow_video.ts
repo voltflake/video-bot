@@ -1,5 +1,5 @@
 import type { Item } from "./util.ts";
-import { join } from "jsr:@std/path";
+import { join } from "path";
 
 // WARNING: h264_v4l2m2m encoder on rpi4 can fail on bigger resolutions
 // 756x1344 is maximum for 9:16 aspect ratio (4096 16pixel blocks) for 60fps

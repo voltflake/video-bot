@@ -1,10 +1,11 @@
-import { join } from "jsr:@std/path";
+import { join } from "path";
 
 export async function compressVideo(data: Uint8Array): Promise<Uint8Array> {
     // Locking mechanism to allow only one compression job at a time.
     console.info(`video compression: Started waiting for lock. Time: ${Date.now()}`);
     while (true) {
         if (Deno.env.has("COMPRESSING_IN_PROCESS")) {
+            // deno-lint-ignore no-await-in-loop
             await new Promise((resolve) => setTimeout(resolve, 1000));
             continue;
         }

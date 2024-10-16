@@ -1,4 +1,4 @@
-import { createBot, Intents, type Message, type User } from "npm:discordeno";
+import { createBot, Intents, type Message, type User } from "discordeno";
 
 import type { Item, SocialMedia, Task } from "./util.ts";
 import { extractInstagramContent } from "./instagram.ts";

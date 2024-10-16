@@ -1,6 +1,6 @@
-import type { Message } from "npm:discordeno";
-import { encodeBase64 } from "jsr:@std/encoding/base64";
-import { parse, join } from "jsr:@std/path";
+import type { Message } from "discordeno";
+import { encodeBase64 } from "base64";
+import { parse, join } from "path";
 
 export async function convertToProperCodec(path_to_audio_file: string): Promise<string> {
     const path_info = parse(path_to_audio_file);

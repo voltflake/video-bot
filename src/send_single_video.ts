@@ -1,4 +1,4 @@
-import { type Bot, MessageFlags } from "npm:discordeno";
+import { type Bot, MessageFlags } from "discordeno";
 import type { Item, Task } from "./util.ts";
 import { compressVideo } from "./video_compression.ts";
 

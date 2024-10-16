@@ -1,4 +1,4 @@
-import { type Bot, type FileContent, type Message, MessageFlags } from "npm:discordeno";
+import { type Bot, type FileContent, type Message, MessageFlags } from "discordeno";
 
 import type { Item, Task } from "./util.ts";
 import { convertToProperCodec, getAudioData, sendVoiceMessage } from "./voice_message.ts";
@@ -37,7 +37,7 @@ export async function sendSlideshow(task: Task, items: Item[], bot: Bot): Promis
     }
 
     const status_message = await bot.helpers.sendMessage(task.message.channelId, {
-        content: "⏳ Generating slideshow video...",
+        content: "\u{23f3} Generating slideshow video...",
         files: filecontent_arr,
         messageReference: { messageId: task.message.id, failIfNotExists: true },
         allowedMentions: { repliedUser: false },

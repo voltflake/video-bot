@@ -1,8 +1,7 @@
-import type { Message } from "npm:discordeno";
+import type { Message } from "discordeno";
 
 export type ContentType = "image" | "video" | "audio";
 export type SocialMedia = "TikTok" | "Instagram" | "YouTube" | "YouTubeShorts";
-export type LogLevel = "INFO" | "FAULT" | "CRITICAL";
 
 export type Item = {
     type: ContentType;
@@ -15,28 +14,6 @@ export type Task = {
     url: string;
     type: SocialMedia;
 };
-
-// function formatDateTime(date: Date): string {
-//     const pad = (num: number): string => String(num).padStart(2, '0');
-//     const year = date.getFullYear();
-//     const month = pad(date.getMonth() + 1); // Months are zero-based
-//     const day = pad(date.getDate());
-//     const hours = pad(date.getHours());
-//     const minutes = pad(date.getMinutes());
-//     const seconds = pad(date.getSeconds());
-//     const milliseconds = String(date.getMilliseconds()).padStart(3, '0');
-//     return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}.${milliseconds}`;
-// }
-
-// export function log(message: string): void {
-//     try {
-//         const encoder = new TextEncoder();
-//         const data = encoder.encode(`${formatDateTime(new Date())} ${message}\n`);
-//         Deno.writeFileSync("diagnostics.txt", data, { append: true });
-//     } catch {
-//         console.error("Failed to write to diagnostics.txt file.");
-//     }
-// }
 
 export async function getContentLength(url: string): Promise<number> {
     try {

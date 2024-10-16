@@ -3,6 +3,7 @@ import { getContentLength, type Item } from "./util.ts";
 export async function extractYoutubeContent(url: string): Promise<Item[]> {
     for (let i = 0; i < 3; i++) {
         try {
+            // deno-lint-ignore no-await-in-loop
             return await ytapi(url);
         } catch (error: unknown) {
             if (error instanceof Error) {

@@ -1,4 +1,9 @@
 {
+	"imports": {
+		"discordeno": "npm:@discordeno/bot",
+		"path": "jsr:@std/path",
+		"base64": "jsr:@std/encoding/base64"
+	},
 	"compilerOptions": {
 		"lib": ["ESNext", "DOM", "deno.ns"],
 		"allowUnreachableCode": false,
@@ -27,5 +32,31 @@
 		"lineWidth": 200,
 		"semiColons": true,
 		"singleQuote": false
+	},
+	"lint": {
+		"rules": {
+			"tags": [
+				"recommended"
+			],
+			"include": [
+				"explicit-function-return-type",
+				"eqeqeq",
+				"explicit-module-boundary-types",
+				"no-await-in-loop",
+				"no-const-assign",
+				"no-eval",
+				"no-external-import",
+				"no-inferrable-types",
+				"no-non-null-asserted-optional-chain",
+				"no-non-null-assertion",
+				"no-self-compare",
+				"no-sparse-arrays",
+				"no-throw-literal",
+				"no-undef",
+				"prefer-ascii",
+				"single-var-declarator",
+				"verbatim-module-syntax"
+			]
+		}
 	}
 }
