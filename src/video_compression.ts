@@ -1,3 +1,5 @@
+import { join } from "jsr:@std/path";
+
 export async function compressVideo(data: Uint8Array): Promise<Uint8Array> {
     // Locking mechanism to allow only one compression job at a time.
     console.info(`video compression: Started waiting for lock. Time: ${Date.now()}`);
@@ -13,8 +15,8 @@ export async function compressVideo(data: Uint8Array): Promise<Uint8Array> {
         console.info(`video compression: Lock aquired. Time: ${Date.now()}`);
 
         const temp_dir = await Deno.makeTempDir();
-        const filename_original = `${temp_dir}/video.mp4`;
-        const filename_compressed = `${temp_dir}/video_compressed.mp4`;
+        const filename_original = join(temp_dir, "video.mp4");
+        const filename_compressed = join(temp_dir, "video_compressed.mp4");
 
         await Deno.writeFile(filename_original, data);
         const original_info = await ffprobe(filename_original);

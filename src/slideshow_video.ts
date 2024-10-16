@@ -34,7 +34,7 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
     // Get image resolutions.
     const image_resolutions: { width: number; height: number }[] = [];
     for (let i = 0; i < image_count; i++) {
-        const command = new Deno.Command("magick", { args: ["identify", `${temp_dir}/image${i + 1}.png`] });
+        const command = new Deno.Command("magick", { args: ["identify", join(temp_dir, `image${i + 1}.png`)] });
         const { code, stdout } = await command.output();
         const magick_output = new TextDecoder().decode(stdout);
         if (code !== 0) {
@@ -87,24 +87,25 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
 
     // scale each image
     for (let i = 0; i < image_count; i++) {
-        // magick convert image1.jpg -resize "1080x1350" -background black -gravity center -extent 1080x1350 output_image2.jpg
         const command = new Deno.Command("magick", {
             args: [
                 "convert",
-                `${temp_dir}/image${i + 1}.png`,
+                join(temp_dir, `image${i + 1}.png`),
                 "-resize",
-                `"${selected_width}x${max_height}"`,
+                `${selected_width}x${max_height}`,
                 "-background",
                 "black",
                 "-gravity",
                 "center",
                 "-extent",
                 `${selected_width}x${max_height}`,
-                `${temp_dir}/image${i + 1}-scaled.png`,
+                join(temp_dir, `image${i + 1}-scaled.png`),
             ],
         });
-        const { code } = await command.output();
+        const { code, stderr } = await command.output();
         if (code !== 0) {
+            console.error("magick convert output -->");
+            console.error(new TextDecoder().decode(stderr));
             throw new Error("magick convert exited with non 0 code");
         }
     }
@@ -117,29 +118,47 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
 
     const loop_duration = Math.ceil((slide_duration + transition_duration) * image_count * 60);
     if (image_count === 1) {
-        const ffmpeg_args = `-loop 1 -framerate 60 -i ${temp_dir}/image1-scaled.png -c:v ${codec} -pix_fmt yuv420p -r 60 -frames ${loop_duration} ${temp_dir}/slideshow_loop.mp4`;
         const command = new Deno.Command("ffmpeg", {
-            args: ffmpeg_args.split(" "),
+            args: [
+                "-loop",
+                "1",
+                "-framerate",
+                "60",
+                "-i",
+                join(temp_dir, "image1-scaled.png"),
+                "-c:v",
+                codec,
+                "-pix_fmt",
+                "yuv420p",
+                "-r",
+                "60",
+                "-frames",
+                `${loop_duration}`,
+                join(temp_dir, "slideshow_loop.mp4"),
+            ],
         });
-        const { code } = await command.output();
+        const { code, stderr } = await command.output();
         if (code !== 0) {
+            console.error("(ffmpeg 1 image slideshow loop generation) output -->");
+            console.error(new TextDecoder().decode(stderr));
             throw new Error("ffmpeg exited with non 0 code. (ffmpeg 1 image slideshow loop generation)");
         }
     } else {
-        let ffmpeg_command = "ffmpeg";
+        const ffmpeg_args: string[] = [];
         for (let i = 0; i < image_count; i++) {
-            ffmpeg_command = ffmpeg_command.concat(` -loop 1 -framerate 60 -i ${temp_dir}/image${i + 1}-scaled.png`);
+            ffmpeg_args.push("-loop", "1", "-framerate", "60", "-i", join(temp_dir, `image${i + 1}-scaled.png`));
         }
-        ffmpeg_command = ffmpeg_command.concat(` -filter_complex "`);
+        ffmpeg_args.push("-filter_complex");
 
         let current_filter_result = 0;
         let current_second_input = 1;
-        ffmpeg_command = ffmpeg_command.concat(`[0][1]xfade=transition=slideleft:duration=${transition_duration.toFixed(1)}:offset=${slide_duration.toFixed(1)}[m0];`);
+        let complex_filter = "";
+        complex_filter = complex_filter.concat(`[0][1]xfade=transition=slideleft:duration=${transition_duration.toFixed(1)}:offset=${slide_duration.toFixed(1)}[m0];`);
         for (let i = 2; i < image_count + 1; i++) {
             const first_input = current_filter_result;
             const second_input = current_second_input + 1 < image_count ? current_second_input + 1 : 0;
             const output = current_filter_result + 1;
-            ffmpeg_command = ffmpeg_command.concat(
+            complex_filter = complex_filter.concat(
                 `[m${first_input}][${second_input}]xfade=transition=slideleft:duration=${transition_duration.toFixed(1)}:offset=${
                     ((slide_duration + transition_duration) * i - transition_duration).toFixed(1)
                 }[m${output}];`,
@@ -147,31 +166,53 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
             current_filter_result += 1;
             current_second_input = second_input;
         }
-        ffmpeg_command = ffmpeg_command.slice(0, -1);
-        ffmpeg_command = ffmpeg_command.concat(`" -map "[m${current_filter_result}]" -c:v ${codec} -pix_fmt yuv420p -r 60 -frames ${loop_duration} ${temp_dir}/slideshow_loop.mp4`);
+
+        ffmpeg_args.push(complex_filter);
+        ffmpeg_args.push("-map", `[m${current_filter_result}]`, "-c:v", codec, "-pix_fmt", "yuv420p", "-r", "60", "-frames", `${loop_duration}`, join(temp_dir, "slideshow_loop.mp4"));
 
         const command = new Deno.Command("ffmpeg", {
-            args: ffmpeg_command.split(" ").slice(1),
+            args: ffmpeg_args,
         });
-        const { code } = await command.output();
+        const { code, stderr } = await command.output();
         if (code !== 0) {
+            console.error("(ffmpeg 2 or more images slideshow loop generation) output -->");
+            console.error(new TextDecoder().decode(stderr));
             throw new Error("ffmpeg exited with non 0 code. (ffmpeg 2 or more images slideshow loop generation)");
         }
     }
 
     // create final video with music
-    const ffmpeg_command2 =
-        `ffmpeg -hide_banner -stream_loop -1 -i ${temp_dir}/slideshow_loop.mp4 -i ${audio_filename} -shortest -c:v copy -c:a aac -pix_fmt yuv420p -movflags +faststart ${temp_dir}/slideshow.mp4`;
-
+    const ffmpeg_args: string[] = [];
+    ffmpeg_args.push(
+        "-hide_banner",
+        "-stream_loop",
+        "-1",
+        "-i",
+        join(temp_dir, "slideshow_loop.mp4"),
+        "-i",
+        audio_filename,
+        "-shortest",
+        "-c:v",
+        "copy",
+        "-c:a",
+        "aac",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        join(temp_dir, "slideshow.mp4"),
+    );
     const command = new Deno.Command("ffmpeg", {
-        args: ffmpeg_command2.split(" ").slice(1),
+        args: ffmpeg_args,
     });
-    const { code } = await command.output();
+    const { code, stderr } = await command.output();
     if (code !== 0) {
+        console.error("(ffmpeg final slideshow generation) output -->");
+        console.error(new TextDecoder().decode(stderr));
         throw new Error("ffmpeg exited with non 0 code. (ffmpeg final slideshow generation)");
     }
 
-    const result = await Deno.readFile(`${temp_dir}/slideshow.mp4`);
+    const result = await Deno.readFile(join(temp_dir, "slideshow.mp4"));
     await Deno.remove(temp_dir, { recursive: true });
 
     return result;

@@ -66,6 +66,7 @@ export async function sendSlideshow(task: Task, items: Item[], bot: Bot): Promis
 
     try {
         await bot.helpers.editMessage(task.message.channelId, status_message.id, {
+            content: "",
             files: [{ blob: new Blob([created_video]), name: "slideshow.mp4" }],
             allowedMentions: { repliedUser: false },
         });

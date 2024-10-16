@@ -1,23 +1,28 @@
 import type { Message } from "npm:discordeno";
 import { encodeBase64 } from "jsr:@std/encoding/base64";
+import { parse, join } from "jsr:@std/path";
 
 export async function convertToProperCodec(path_to_audio_file: string): Promise<string> {
-    const command = new Deno.Command("ffmpeg", { args: ["-i", path_to_audio_file, "-c:a", "libopus", "-vn", `${path_to_audio_file}.ogg`] });
+    const path_info = parse(path_to_audio_file);
+    const output_filename = join(path_info.dir, `${path_info.name}.ogg`);
+    const command = new Deno.Command("ffmpeg", { args: ["-i", path_to_audio_file, "-c:a", "libopus", "-vn", output_filename] });
     const { code } = await command.output();
     if (code !== 0) {
         throw new Error("ffmpeg exited with non 0 code when creating OPUS audio file");
     }
-    return `${path_to_audio_file}.ogg`;
+    return output_filename;
 }
 
 export async function getAudioData(path_to_audio_file: string): Promise<{ duration: number; waveform: Uint8Array }> {
-    const command = new Deno.Command("ffmpeg", { args: ["-i", path_to_audio_file, "-f", "u8", "-ac", "1", "-ar", "1000", `${path_to_audio_file}.raw`] });
+    const path_info = parse(path_to_audio_file);
+    const output_filename = join(path_info.dir, `${path_info.name}.raw`);
+    const command = new Deno.Command("ffmpeg", { args: ["-i", path_to_audio_file, "-f", "u8", "-ac", "1", "-ar", "1000", output_filename] });
     const { code } = await command.output();
     if (code !== 0) {
         throw new Error("ffmpeg exited with non 0 code when creating raw audio file");
     }
 
-    const data = Array.from(await Deno.readFile(`${path_to_audio_file}.raw`));
+    const data = Array.from(await Deno.readFile(output_filename));
     const duration = data.length / 1000;
     let waveform_samples = 1 + Math.floor(data.length / 100);
     if (waveform_samples > 256) {
@@ -36,7 +41,7 @@ export async function getAudioData(path_to_audio_file: string): Promise<{ durati
     }
 
     try {
-        await Deno.remove(`${path_to_audio_file}.raw`);
+        await Deno.remove(output_filename);
     } catch {
         console.error("Failed to remove temporary raw audio file");
     }
