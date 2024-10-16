@@ -1,9 +1,10 @@
 import { createBot, Intents, type Message, type User } from "discordeno";
-
 import type { Item, SocialMedia, Task } from "./util.ts";
+
 import { extractInstagramContent } from "./instagram.ts";
 import { extractTiktokContent } from "./tiktok.ts";
 import { extractYoutubeContent } from "./youtube.ts";
+
 import { sendSingleVideo } from "./send_single_video.ts";
 import { sendSlideshow } from "./send_slideshow.ts";
 
@@ -18,20 +19,19 @@ if (!bot_token) {
 const bot = createBot({
     intents: Intents.Guilds | Intents.MessageContent | Intents.GuildMessages,
     token: bot_token,
-    defaultDesiredPropertiesValue: true,
-    // desiredProperties: {
-    //   message: {
-    //     author: true,
-    //     channelId: true,
-    //     attachments: true,
-    //     id: true,
-    //     guildId: true,
-    //     content: true,
-    //     referencedMessage: true
-    //   },
-    //   user: { id: true, username: true, discriminator: true },
-    //   attachment: { url: true, proxyUrl: true, id: true, filename: true, size: true, waveform: true, duration_secs: true }
-    // }
+    desiredProperties: {
+        message: {
+            author: true,
+            channelId: true,
+            attachments: true,
+            id: true,
+            guildId: true,
+            content: true,
+            referencedMessage: true,
+        },
+        user: { id: true, username: true, discriminator: true },
+        attachment: { url: true, proxyUrl: true, id: true, filename: true, size: true, waveform: true, duration_secs: true },
+    },
 });
 
 // Graceful shutdown.
