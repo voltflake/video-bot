@@ -2,10 +2,10 @@ import { getContentLength, type Item } from "./util.ts";
 
 export async function extractInstagramContent(url: string): Promise<Item[]> {
     try {
-        return await rocketapi(url);
+        return await starapi(url);
     } catch (error: unknown) {
         if (error instanceof Error) {
-            console.error("rocketapi() failed. Stack trace -->");
+            console.error("starapi() failed. Stack trace -->");
             console.error(error.stack);
         } else {
             throw new Error("unreachable");
@@ -14,7 +14,7 @@ export async function extractInstagramContent(url: string): Promise<Item[]> {
     throw new Error("All Instagram APIs failed");
 }
 
-type RocketapiResponse = {
+type StarapiResponse = {
     response: {
         body: {
             items: {
@@ -33,7 +33,7 @@ type RocketapiResponse = {
     };
 };
 
-async function rocketapi(url: string): Promise<Item[]> {
+async function starapi(url: string): Promise<Item[]> {
     const key = Deno.env.get("RAPIDAPI_KEY");
     if (!key) {
         throw new Error("RapidAPI key not found");
@@ -44,13 +44,13 @@ async function rocketapi(url: string): Promise<Item[]> {
         throw new Error("Failed to extract shortcode from URL");
     }
 
-    const apiUrl = "https://rocketapi-for-instagram.p.rapidapi.com/instagram/media/get_info_by_shortcode";
+    const apiUrl = "https://starapi1.p.rapidapi.com/instagram/media/get_info_by_shortcode";
     const options = {
         method: "POST",
         headers: {
             "content-type": "application/json",
             "X-RapidAPI-Key": key,
-            "X-RapidAPI-Host": "rocketapi-for-instagram.p.rapidapi.com",
+            "X-RapidAPI-Host": "starapi1.p.rapidapi.com",
         },
         body: JSON.stringify({
             shortcode: shortcode[0],
@@ -58,7 +58,7 @@ async function rocketapi(url: string): Promise<Item[]> {
     };
 
     const response = await fetch(apiUrl, options);
-    const json: RocketapiResponse = await response.json();
+    const json: StarapiResponse = await response.json();
 
     const info = json.response.body.items[0];
     if (info.product_type === "carousel_container") {
@@ -73,7 +73,7 @@ async function rocketapi(url: string): Promise<Item[]> {
     throw new Error(`Encountered unknown product_type. type: ${info.product_type} shortcode: ${info.code}`);
 }
 // Post with multiple items.
-async function handleCarouselCase(info: RocketapiResponse["response"]["body"]["items"][number]): Promise<Item[]> {
+async function handleCarouselCase(info: StarapiResponse["response"]["body"]["items"][number]): Promise<Item[]> {
     const result: Item[] = [];
 
     // Add items from post to result.
@@ -109,7 +109,7 @@ async function handleCarouselCase(info: RocketapiResponse["response"]["body"]["i
 }
 
 // Post with single photo. With or without music.
-async function handleFeedCase(info: RocketapiResponse["response"]["body"]["items"][number]): Promise<Item[]> {
+async function handleFeedCase(info: StarapiResponse["response"]["body"]["items"][number]): Promise<Item[]> {
     const result: Item[] = [];
 
     // Add image to result.
@@ -128,7 +128,7 @@ async function handleFeedCase(info: RocketapiResponse["response"]["body"]["items
 }
 
 // Post with a single video. (reel)
-async function handleClipsCase(info: RocketapiResponse["response"]["body"]["items"][number]): Promise<Item[]> {
+async function handleClipsCase(info: StarapiResponse["response"]["body"]["items"][number]): Promise<Item[]> {
     const url = info.video_versions[0].url;
     const size = await getContentLength(url);
     return [{ type: "video", url: url, size: size }];
