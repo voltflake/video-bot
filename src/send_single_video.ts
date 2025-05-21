@@ -8,12 +8,12 @@ export async function sendSingleVideo(task: Task, item: Item, bot: Bot): Promise
         throw new Error("Video is too big to even try to compress it");
     }
 
-    // Video is in range of 25-100 MB. Try to compress to less than 25MB.
-    if (item.size > 25 * 1024 * 1024) {
+    // Video is in range of 10-100 MB. Try to compress to less than 10MB.
+    if (item.size > 10 * 1024 * 1024) {
         let video = await downloadVideo(item.url);
         video = await compressVideo(video);
 
-        if (video.byteLength > 25 * 1_000_000) {
+        if (video.byteLength > 10 * 1024 * 1024) {
             throw new Error("Failed to compress video enough to fit into Discord limits");
         }
 
@@ -38,7 +38,7 @@ export async function sendSingleVideo(task: Task, item: Item, bot: Bot): Promise
         }
     }
 
-    // No need for compression video is less than 25MB
+    // No need for compression video is less than 10MB
     const video = await downloadVideo(item.url);
 
     try {

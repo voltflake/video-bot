@@ -5,7 +5,6 @@ export async function compressVideo(data: Uint8Array): Promise<Uint8Array> {
     console.info(`video compression: Started waiting for lock. Time: ${Date.now()}`);
     while (true) {
         if (Deno.env.has("COMPRESSING_IN_PROCESS")) {
-            // deno-lint-ignore no-await-in-loop
             await new Promise((resolve) => setTimeout(resolve, 1000));
             continue;
         }
@@ -22,10 +21,10 @@ export async function compressVideo(data: Uint8Array): Promise<Uint8Array> {
         await Deno.writeFile(filename_original, data);
         const original_info = await ffprobe(filename_original);
 
-        // 4% reserved for muxing overhead.
-        const available_bits_per_second = (25 * 1024 * 1024 * 8 * 0.96) / original_info.duration_in_seconds;
+        // 4% of file size is reserved for muxing overhead
+        const available_bits_per_second = (10 * 1024 * 1024 * 8 * 0.96) / original_info.duration_in_seconds;
 
-        // 0.80 is additional space if some video gets over +10% bitrate it was given
+        // Leave 10% of maximum video stream size just to be sure codec won't exceed hard size limit
         // Note that Raspberry Pi with h264_omx codec can't hv-encode videos with bitrate less than 150kb/s
         const required_video_bitrate = Math.floor((available_bits_per_second - original_info.audio_bitrate) * 0.9);
 
@@ -46,10 +45,10 @@ export async function compressVideo(data: Uint8Array): Promise<Uint8Array> {
         const compressed_info = await ffprobe(filename_compressed);
         const compressed_video = await Deno.readFile(filename_compressed);
 
-        // Comment this section to keep temporary files after compression for testing.
+        // Comment this section to keep temporary files after compression for testing
         await Deno.remove(temp_dir, { recursive: true });
 
-        // Telemetry to help pick better compression settings for each codec in future.
+        // Telemetry to help pick better compression settings for each codec in future
         const cbr_bitrate_error_percentage = compressed_info.video_bitrate / (required_video_bitrate * 0.01) - 100;
         const video_duration = original_info.duration_in_seconds;
 
@@ -84,9 +83,11 @@ async function ffprobe(filename: string): Promise<{ duration_in_seconds: number;
         throw new Error("ffprobe exited with non 0 code");
     }
     const data = JSON.parse(ffprobe_output);
-    const duration_in_seconds = Number.parseFloat(data.streams[0].duration);
-    const video_bitrate = Number.parseInt(data.streams[0].bit_rate);
-    const audio_bitrate = Number.parseInt(data.streams[1].bit_rate);
+    const duration_in_seconds = Number.parseFloat(data.format.duration);
+    const video_stream = data.streams.find((stream: { codec_type: string }) => stream.codec_type === "video");
+    const video_bitrate = Number.parseInt(video_stream.bit_rate);
+    const audio_stream = data.streams.find((stream: { codec_type: string }) => stream.codec_type === "audio");
+    const audio_bitrate = Number.parseInt(audio_stream.bit_rate);
     return {
         duration_in_seconds: duration_in_seconds,
         video_bitrate: video_bitrate,
