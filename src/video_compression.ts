@@ -83,11 +83,11 @@ async function ffprobe(filename: string): Promise<{ duration_in_seconds: number;
         throw new Error("ffprobe exited with non 0 code");
     }
     const data = JSON.parse(ffprobe_output);
-    const duration_in_seconds = Number.parseFloat(data.format.duration);
     const video_stream = data.streams.find((stream: { codec_type: string }) => stream.codec_type === "video");
     const video_bitrate = Number.parseInt(video_stream.bit_rate);
     const audio_stream = data.streams.find((stream: { codec_type: string }) => stream.codec_type === "audio");
     const audio_bitrate = Number.parseInt(audio_stream.bit_rate);
+    const duration_in_seconds = Number.parseFloat(video_stream.duration);
     return {
         duration_in_seconds: duration_in_seconds,
         video_bitrate: video_bitrate,
