@@ -10,10 +10,10 @@ import { sendSlideshow } from "./send_slideshow.ts";
 
 console.info("Feedback and bug reports: https://github.com/voltflake/video-bot/issues/new");
 
-const bot_token = Deno.env.get("DISCORD_TOKEN");
+const bot_token = process.env["DISCORD_TOKEN"];
 if (!bot_token) {
     console.error("Discord bot token does not exist. Exiting...");
-    Deno.exit(1);
+    process.exit(1);
 }
 
 const client = new Client(bot_token, {gateway: { intents:
@@ -23,10 +23,10 @@ const client = new Client(bot_token, {gateway: { intents:
 }});
 
 // Graceful shutdown.
-Deno.addSignalListener("SIGINT", () => {
+process.on("SIGINT", () => {
     console.info("Shutting down, please wait...");
     client.disconnect();
-    Deno.exit();
+    process.exit(0);
 });
 
 // Let bot owner know it's working.
@@ -62,9 +62,12 @@ async function processTask(task: Task): Promise<void> {
     }
 
     // Simple case. A single video.
-    if (items.length === 1 && items[0].type === "video") {
-        await sendSingleVideo(task, items[0], client);
-        return;
+    if (items.length === 1) {
+        const item = items[0];
+        if (item !== undefined && item.type === "video") {
+            await sendSingleVideo(task, item, client);
+            return;
+        }
     }
 
     const audio = items.find((item) => {

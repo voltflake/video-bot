@@ -27,7 +27,7 @@ type YtapiResponse = {
 
 // https://rapidapi.com/ytjar/api/yt-api
 async function ytapi(url: string): Promise<Item[]> {
-    const key = Deno.env.get("RAPIDAPI_KEY");
+    const key = process.env["RAPIDAPI_KEY"];
     if (!key) {
         throw new Error("RapidAPI key not found");
     }

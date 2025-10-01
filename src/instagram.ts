@@ -34,7 +34,7 @@ type StarapiResponse = {
 };
 
 async function starapi(url: string): Promise<Item[]> {
-    const key = Deno.env.get("RAPIDAPI_KEY");
+    const key = process.env["RAPIDAPI_KEY"];
     if (!key) {
         throw new Error("RapidAPI key not found");
     }
@@ -61,6 +61,9 @@ async function starapi(url: string): Promise<Item[]> {
     const json: StarapiResponse = await response.json();
 
     const info = json.response.body.items[0];
+    if (info == undefined) {
+        throw new Error("Failed to extract media info");
+    }
     if (info.product_type === "carousel_container") {
         return handleCarouselCase(info);
     }
@@ -80,6 +83,9 @@ async function handleCarouselCase(info: StarapiResponse["response"]["body"]["ite
     for (const item of info.carousel_media) {
         // Item is an image.
         if (item.media_type === 1) {
+            if (!item.image_versions2 || !item.image_versions2.candidates[0]) {
+                throw new Error(`Failed to extract image URL from Instagram carousel post. Shortcode is: ${info.code}`);
+            }
             const url = item.image_versions2.candidates[0].url;
             const size = await getContentLength(url);
             result.push({ type: "image", url: url, size: size });
@@ -87,6 +93,9 @@ async function handleCarouselCase(info: StarapiResponse["response"]["body"]["ite
         }
         // Item is an video.
         if (item.media_type === 2) {
+            if (!item.video_versions || !item.video_versions[0]) {
+                throw new Error(`Failed to extract video URL from Instagram carousel post. Shortcode is: ${info.code}`);
+            }
             const url = item.video_versions[0].url;
             const size = await getContentLength(url);
             result.push({ type: "video", url: url, size: size });
@@ -113,6 +122,9 @@ async function handleFeedCase(info: StarapiResponse["response"]["body"]["items"]
     const result: Item[] = [];
 
     // Add image to result.
+    if (!info.image_versions2 || !info.image_versions2.candidates[0]) {
+        throw new Error(`Failed to extract image URL from Instagram feed post. Shortcode is: ${info.code}`);
+    }
     const url = info.image_versions2.candidates[0].url;
     const size = await getContentLength(url);
     result.push({ type: "image", url: url, size: size });
@@ -129,6 +141,9 @@ async function handleFeedCase(info: StarapiResponse["response"]["body"]["items"]
 
 // Post with a single video. (reel)
 async function handleClipsCase(info: StarapiResponse["response"]["body"]["items"][number]): Promise<Item[]> {
+    if (!info.video_versions || !info.video_versions[0]) {
+        throw new Error(`Failed to extract video URL from Instagram reel post. Shortcode is: ${info.code}`);
+    }
     const url = info.video_versions[0].url;
     const size = await getContentLength(url);
     return [{ type: "video", url: url, size: size }];

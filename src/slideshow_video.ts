@@ -1,5 +1,7 @@
 import type { Item } from "./util.ts";
-import { join } from "path";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // WARNING: h264_v4l2m2m encoder on rpi4 can fail on bigger resolutions
 // 756x1344 is maximum for 9:16 aspect ratio (4096 16pixel blocks) for 60fps
@@ -9,39 +11,37 @@ import { join } from "path";
 
 export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
     let codec = "libx264";
-    const prefered_codec = Deno.env.get("CODEC");
+    const prefered_codec =  process.env["CODEC"];
     if (prefered_codec) {
         codec = prefered_codec;
     }
 
-    const temp_dir = await Deno.makeTempDir();
+    const temp_dir = await mkdtemp(join(tmpdir(), "video-bot-"));
 
     // download all required assets
     let image_count = 0;
     const audio_filename = join(temp_dir, "audio.mp3");
     for (const [index, item] of items.entries()) {
-        const data = await (await fetch(item.url)).bytes();
+        const data = new Uint8Array(await (await fetch(item.url)).arrayBuffer());
         if (item.type === "image") {
             image_count += 1;
             // TODO: Do not assume all pictures are .png files.
-            await Deno.writeFile(join(temp_dir, `image${index}.png`), data);
+            await writeFile(join(temp_dir, `image${index}.png`), data);
         }
         if (item.type === "audio") {
-            await Deno.writeFile(audio_filename, data);
+            await writeFile(audio_filename, data);
         }
     }
 
     // Get image resolutions.
     const image_resolutions: { width: number; height: number }[] = [];
     for (let i = 0; i < image_count; i++) {
-        const command = new Deno.Command("magick", { args: ["identify", join(temp_dir, `image${i + 1}.png`)] });
-        const { code, stdout } = await command.output();
-        const magick_output = new TextDecoder().decode(stdout);
+        const { code, stdout } = await runCommand(["magick", "identify", join(temp_dir, `image${i + 1}.png`)]);
         if (code !== 0) {
             throw new Error("magick identify exited with non 0 code");
         }
 
-        const match = magick_output.match(/(?<width>\d+)x(?<height>\d+)/);
+        const match = stdout.match(/(?<width>\d+)x(?<height>\d+)/);
 
         if (!match) {
             throw new Error("No matches found when using regex on magick identify output");
@@ -50,8 +50,8 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
             throw new Error("No groups were found in matches found when using regex on magick identify output");
         }
         image_resolutions.push({
-            width: Number.parseInt(match.groups["width"]),
-            height: Number.parseInt(match.groups["height"]),
+            width: Number.parseInt(match.groups["width"]!),
+            height: Number.parseInt(match.groups["height"]!),
         });
     }
 
@@ -87,25 +87,23 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
 
     // scale each image
     for (let i = 0; i < image_count; i++) {
-        const command = new Deno.Command("magick", {
-            args: [
-                "convert",
-                join(temp_dir, `image${i + 1}.png`),
-                "-resize",
-                `${selected_width}x${max_height}`,
-                "-background",
-                "black",
-                "-gravity",
-                "center",
-                "-extent",
-                `${selected_width}x${max_height}`,
-                join(temp_dir, `image${i + 1}-scaled.png`),
-            ],
-        });
-        const { code, stderr } = await command.output();
+        const { code, stderr } = await runCommand([
+            "magick",
+            "convert",
+            join(temp_dir, `image${i + 1}.png`),
+            "-resize",
+            `${selected_width}x${max_height}`,
+            "-background",
+            "black",
+            "-gravity",
+            "center",
+            "-extent",
+            `${selected_width}x${max_height}`,
+            join(temp_dir, `image${i + 1}-scaled.png`),
+        ]);
         if (code !== 0) {
             console.error("magick convert output -->");
-            console.error(new TextDecoder().decode(stderr));
+            console.error(stderr);
             throw new Error("magick convert exited with non 0 code");
         }
     }
@@ -118,33 +116,31 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
 
     const loop_duration = Math.ceil((slide_duration + transition_duration) * image_count * 60);
     if (image_count === 1) {
-        const command = new Deno.Command("ffmpeg", {
-            args: [
-                "-loop",
-                "1",
-                "-framerate",
-                "60",
-                "-i",
-                join(temp_dir, "image1-scaled.png"),
-                "-c:v",
-                codec,
-                "-pix_fmt",
-                "yuv420p",
-                "-r",
-                "60",
-                "-frames",
-                `${loop_duration}`,
-                join(temp_dir, "slideshow_loop.mp4"),
-            ],
-        });
-        const { code, stderr } = await command.output();
+        const { code, stderr } = await runCommand([
+            "ffmpeg",
+            "-loop",
+            "1",
+            "-framerate",
+            "60",
+            "-i",
+            join(temp_dir, "image1-scaled.png"),
+            "-c:v",
+            codec,
+            "-pix_fmt",
+            "yuv420p",
+            "-r",
+            "60",
+            "-frames",
+            `${loop_duration}`,
+            join(temp_dir, "slideshow_loop.mp4"),
+        ]);
         if (code !== 0) {
             console.error("(ffmpeg 1 image slideshow loop generation) output -->");
-            console.error(new TextDecoder().decode(stderr));
+            console.error(stderr);
             throw new Error("ffmpeg exited with non 0 code. (ffmpeg 1 image slideshow loop generation)");
         }
     } else {
-        const ffmpeg_args: string[] = [];
+        const ffmpeg_args: string[] = ["ffmpeg"];
         for (let i = 0; i < image_count; i++) {
             ffmpeg_args.push("-loop", "1", "-framerate", "60", "-i", join(temp_dir, `image${i + 1}-scaled.png`));
         }
@@ -170,20 +166,17 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
         ffmpeg_args.push(complex_filter);
         ffmpeg_args.push("-map", `[m${current_filter_result}]`, "-c:v", codec, "-pix_fmt", "yuv420p", "-r", "60", "-frames", `${loop_duration}`, join(temp_dir, "slideshow_loop.mp4"));
 
-        const command = new Deno.Command("ffmpeg", {
-            args: ffmpeg_args,
-        });
-        const { code, stderr } = await command.output();
+        const { code, stderr } = await runCommand(ffmpeg_args);
         if (code !== 0) {
             console.error("(ffmpeg 2 or more images slideshow loop generation) output -->");
-            console.error(new TextDecoder().decode(stderr));
+            console.error(stderr);
             throw new Error("ffmpeg exited with non 0 code. (ffmpeg 2 or more images slideshow loop generation)");
         }
     }
 
     // create final video with music
-    const ffmpeg_args: string[] = [];
-    ffmpeg_args.push(
+    const ffmpeg_args: string[] = [
+        "ffmpeg",
         "-hide_banner",
         "-stream_loop",
         "-1",
@@ -201,19 +194,34 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
         "-movflags",
         "+faststart",
         join(temp_dir, "slideshow.mp4"),
-    );
-    const command = new Deno.Command("ffmpeg", {
-        args: ffmpeg_args,
-    });
-    const { code, stderr } = await command.output();
+    ];
+    const { code, stderr } = await runCommand(ffmpeg_args);
     if (code !== 0) {
         console.error("(ffmpeg final slideshow generation) output -->");
-        console.error(new TextDecoder().decode(stderr));
+        console.error(stderr);
         throw new Error("ffmpeg exited with non 0 code. (ffmpeg final slideshow generation)");
     }
 
-    const result = await Deno.readFile(join(temp_dir, "slideshow.mp4"));
-    await Deno.remove(temp_dir, { recursive: true });
+    const result = await readFile(join(temp_dir, "slideshow.mp4"));
+    await rm(temp_dir, { recursive: true, force: true });
 
     return result;
+}
+
+async function runCommand(cmd: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
+    if (cmd.length === 0) {
+        throw new Error("runCommand requires at least one argument");
+    }
+    const binary = cmd[0];
+    if (!binary) {
+        throw new Error("runCommand requires a binary name");
+    }
+    const args = cmd.slice(1);
+    const process = Bun.spawn({ cmd: [binary, ...args], stdout: "pipe", stderr: "pipe" });
+    const [code, stdout, stderr] = await Promise.all([
+        process.exited,
+        process.stdout ? new Response(process.stdout).text() : "",
+        process.stderr ? new Response(process.stderr).text() : "",
+    ]);
+    return { code, stdout, stderr };
 }

@@ -3,6 +3,10 @@ import { type Client, type Message, MessageFlags, type FileData } from "disgroov
 import type { Item, Task } from "./util.ts";
 import { convertToProperCodec, getAudioData, sendVoiceMessage } from "./voice_message.ts";
 import { createSlideshowVideo } from "./slideshow_video.ts";
+import { writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 
 export async function sendSlideshow(task: Task, items: Item[], client: Client): Promise<void> {
     const audio_item = items.find((item) => item.type === "audio");
@@ -11,8 +15,8 @@ export async function sendSlideshow(task: Task, items: Item[], client: Client): 
     }
     const audio_response = await fetch(audio_item.url);
     const audio_data = await audio_response.bytes();
-    const audio_filename = await Deno.makeTempFile({ suffix: ".mp3" });
-    await Deno.writeFile(audio_filename, audio_data);
+    const audio_filename = join(tmpdir(), `audio-${randomUUID()}.mp3`);
+    await writeFile(audio_filename, audio_data);
     const ogg_filename = await convertToProperCodec(audio_filename);
     const audio_info = await getAudioData(ogg_filename);
 

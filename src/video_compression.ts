@@ -1,24 +1,26 @@
-import { join } from "path";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 export async function compressVideo(data: ArrayBuffer): Promise<ArrayBuffer> {
     // Locking mechanism to allow only one compression job at a time.
     console.info(`video compression: Started waiting for lock. Time: ${Date.now()}`);
     while (true) {
-        if (Deno.env.has("COMPRESSING_IN_PROCESS")) {
+        if (process.env["COMPRESSING_IN_PROCESS"]) {
             await new Promise((resolve) => setTimeout(resolve, 1000));
             continue;
         }
         break;
     }
     try {
-        Deno.env.set("COMPRESSING_IN_PROCESS", "");
+        process.env["COMPRESSING_IN_PROCESS"] = "1";
         console.info(`video compression: Lock aquired. Time: ${Date.now()}`);
 
-        const temp_dir = await Deno.makeTempDir();
+        const temp_dir = await mkdtemp(join(tmpdir(), "video-bot-"));
         const filename_original = join(temp_dir, "video.mp4");
         const filename_compressed = join(temp_dir, "video_compressed.mp4");
 
-        await Deno.writeFile(filename_original, new Uint8Array(data));
+        await writeFile(filename_original, new Uint8Array(data));
         const original_info = await ffprobe(filename_original);
 
         // 4% of file size is reserved for muxing overhead
@@ -31,25 +33,25 @@ export async function compressVideo(data: ArrayBuffer): Promise<ArrayBuffer> {
         const ffmpeg_args = ["-i", `${filename_original}`, "-y", "-c:a", "copy", "-b:v", `${required_video_bitrate.toString()}`];
 
         ffmpeg_args.push("-c:v");
-        const prefered_codec = Deno.env.get("CODEC");
+        const prefered_codec = process.env["CODEC"];
         ffmpeg_args.push(prefered_codec ? prefered_codec : "libx264");
 
         ffmpeg_args.push(filename_compressed);
 
-        const command = new Deno.Command("ffmpeg", { args: ffmpeg_args });
-        const { code } = await command.output();
+        const { code, stderr } = await runCommand(["ffmpeg", ...ffmpeg_args]);
         if (code !== 0) {
+            console.error("ffmpeg compression stderr -->");
+            console.error(stderr);
             throw new Error(`ffmpeg failed when compressing video. Non 0 exit code. filename: ${filename_original} Args: ${ffmpeg_args.join(" ")}`);
         }
 
         const compressed_info = await ffprobe(filename_compressed);
-        const compressed_video_temp = await Deno.readFile(filename_compressed);
-        // convert it to ArrayBuffer
-        const compressed_video = compressed_video_temp.buffer.slice(compressed_video_temp.byteOffset, compressed_video_temp.byteOffset + compressed_video_temp.byteLength);
+    const compressed_video_temp = await readFile(filename_compressed);
+    const compressed_video = new Uint8Array(compressed_video_temp);
 
 
         // Comment this section to keep temporary files after compression for testing
-        await Deno.remove(temp_dir, { recursive: true });
+        await rm(temp_dir, { recursive: true, force: true });
 
         // Telemetry to help pick better compression settings for each codec in future
         const cbr_bitrate_error_percentage = compressed_info.video_bitrate / (required_video_bitrate * 0.01) - 100;
@@ -62,15 +64,15 @@ export async function compressVideo(data: ArrayBuffer): Promise<ArrayBuffer> {
         console.info(`size=${toMbString(video_duration * original_info.video_bitrate * 8)}`);
         console.info(`original audio stream: bitrate=${original_info.audio_bitrate} `);
         console.info(`size=${toMbString(video_duration * original_info.audio_bitrate * 8)}`);
-        console.info(`resulted file size: ${toMbString(compressed_video.byteLength / (1024 * 1024))}`);
-        console.info(`resulted video stream: bitrate=${compressed_info.video_bitrate} `);
-        console.info(`size=${toMbString(video_duration * compressed_info.video_bitrate * 8)}`);
-        console.info(`resulted audio stream: bitrate=${compressed_info.audio_bitrate} `);
-        console.info(`size=${toMbString(video_duration * compressed_info.audio_bitrate * 8)}`);
+    console.info(`resulted file size: ${toMbString(compressed_video.byteLength / (1024 * 1024))}`);
+    console.info(`resulted video stream: bitrate=${compressed_info.video_bitrate} `);
+    console.info(`size=${toMbString(video_duration * compressed_info.video_bitrate * 8)}`);
+    console.info(`resulted audio stream: bitrate=${compressed_info.audio_bitrate} `);
+    console.info(`size=${toMbString(video_duration * compressed_info.audio_bitrate * 8)}`);
         console.info(`ffmpeg cbr error: ${cbr_bitrate_error_percentage.toFixed(2)}%`);
-        return compressed_video;
+    return compressed_video.buffer;
     } finally {
-        Deno.env.delete("COMPRESSING_IN_PROCESS");
+        delete process.env["COMPRESSING_IN_PROCESS"];
     }
 }
 
@@ -79,13 +81,13 @@ function toMbString(bytes: number): string {
 }
 
 async function ffprobe(filename: string): Promise<{ duration_in_seconds: number; video_bitrate: number; audio_bitrate: number }> {
-    const command = new Deno.Command("ffprobe", { args: ["-v", "quiet", "-print_format", "json", "-show_streams", `${filename}`] });
-    const { code, stdout } = await command.output();
-    const ffprobe_output = new TextDecoder().decode(stdout);
+    const { code, stdout, stderr } = await runCommand(["ffprobe", "-v", "quiet", "-print_format", "json", "-show_streams", `${filename}`]);
     if (code !== 0) {
+        console.error("ffprobe stderr -->");
+        console.error(stderr);
         throw new Error("ffprobe exited with non 0 code");
     }
-    const data = JSON.parse(ffprobe_output);
+    const data = JSON.parse(stdout);
     const video_stream = data.streams.find((stream: { codec_type: string }) => stream.codec_type === "video");
     const video_bitrate = Number.parseInt(video_stream.bit_rate);
     const audio_stream = data.streams.find((stream: { codec_type: string }) => stream.codec_type === "audio");
@@ -96,4 +98,22 @@ async function ffprobe(filename: string): Promise<{ duration_in_seconds: number;
         video_bitrate: video_bitrate,
         audio_bitrate: audio_bitrate,
     };
+}
+
+async function runCommand(cmd: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
+    if (cmd.length === 0) {
+        throw new Error("runCommand requires at least one argument");
+    }
+    const binary = cmd[0];
+    if (!binary) {
+        throw new Error("runCommand requires a binary name");
+    }
+    const args = cmd.slice(1);
+    const process = Bun.spawn({ cmd: [binary, ...args], stdout: "pipe", stderr: "pipe" });
+    const [code, stdout, stderr] = await Promise.all([
+        process.exited,
+        process.stdout ? new Response(process.stdout).text() : "",
+        process.stderr ? new Response(process.stderr).text() : "",
+    ]);
+    return { code, stdout, stderr };
 }

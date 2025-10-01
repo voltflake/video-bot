@@ -1,13 +1,14 @@
 import type { Message } from "disgroove";
-import { encodeBase64 } from "base64";
-import { parse, join } from "path";
+import { parse, join } from "node:path";
+import { readFile, rm } from "node:fs/promises";
 
 export async function convertToProperCodec(path_to_audio_file: string): Promise<string> {
     const path_info = parse(path_to_audio_file);
     const output_filename = join(path_info.dir, `${path_info.name}.ogg`);
-    const command = new Deno.Command("ffmpeg", { args: ["-i", path_to_audio_file, "-c:a", "libopus", "-vn", output_filename] });
-    const { code } = await command.output();
+    const { code, stderr } = await runCommand(["ffmpeg", "-i", path_to_audio_file, "-c:a", "libopus", "-vn", output_filename]);
     if (code !== 0) {
+        console.error("convertToProperCodec(): ffmpeg stderr -->");
+        console.error(stderr);
         throw new Error("ffmpeg exited with non 0 code when creating OPUS audio file");
     }
     return output_filename;
@@ -16,13 +17,15 @@ export async function convertToProperCodec(path_to_audio_file: string): Promise<
 export async function getAudioData(path_to_audio_file: string): Promise<{ duration: number; waveform: Uint8Array }> {
     const path_info = parse(path_to_audio_file);
     const output_filename = join(path_info.dir, `${path_info.name}.raw`);
-    const command = new Deno.Command("ffmpeg", { args: ["-i", path_to_audio_file, "-f", "u8", "-ac", "1", "-ar", "1000", output_filename] });
-    const { code } = await command.output();
+    const { code, stderr } = await runCommand(["ffmpeg", "-i", path_to_audio_file, "-f", "u8", "-ac", "1", "-ar", "1000", output_filename]);
     if (code !== 0) {
+        console.error("getAudioData(): ffmpeg stderr -->");
+        console.error(stderr);
         throw new Error("ffmpeg exited with non 0 code when creating raw audio file");
     }
 
-    const data = Array.from(await Deno.readFile(output_filename));
+    const rawBuffer = await readFile(output_filename);
+    const data = Array.from(rawBuffer);
     const duration = data.length / 1000;
     let waveform_samples = 1 + Math.floor(data.length / 100);
     if (waveform_samples > 256) {
@@ -41,7 +44,7 @@ export async function getAudioData(path_to_audio_file: string): Promise<{ durati
     }
 
     try {
-        await Deno.remove(output_filename);
+        await rm(output_filename, { force: true });
     } catch {
         console.error("Failed to remove temporary raw audio file");
     }
@@ -57,10 +60,11 @@ function volume(byte: number): number {
 }
 
 // NOTE: temporary workaround until discordeno properly supports voice messages
-export async function sendVoiceMessage(channel_id: string, path_to_audio_file: string, waveform: Uint8Array, duration: number): Promise<Message> {
-    const data = await Deno.readFile(path_to_audio_file);
+export async function sendVoiceMessage(channel_id: string | bigint, path_to_audio_file: string, waveform: Uint8Array, duration: number): Promise<Message> {
+    const fileData = await readFile(path_to_audio_file);
+    const arrayBuffer = toArrayBuffer(new Uint8Array(fileData));
     const form = new FormData();
-    form.append("files[0]", new Blob([data], { type: "audio/ogg" }), "song.ogg");
+    form.append("files[0]", new Blob([arrayBuffer], { type: "audio/ogg" }), "song.ogg");
 
     const payloadJson = {
         attachments: [
@@ -76,7 +80,7 @@ export async function sendVoiceMessage(channel_id: string, path_to_audio_file: s
 
     form.append("payload_json", JSON.stringify(payloadJson));
 
-    const bot_key = Deno.env.get("DISCORD_TOKEN");
+    const bot_key = process.env["DISCORD_TOKEN"];
     if (!bot_key) {
         throw new Error("DISCORD_TOKEN is not in enviroment");
     }
@@ -96,4 +100,36 @@ export async function sendVoiceMessage(channel_id: string, path_to_audio_file: s
     
     const message: Message = await response.json();
     return message;
+}
+
+async function runCommand(cmd: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
+    if (cmd.length === 0) {
+        throw new Error("runCommand requires at least one argument");
+    }
+    const binary = cmd[0];
+    if (!binary) {
+        throw new Error("runCommand requires a binary name");
+    }
+    const args = cmd.slice(1);
+    const process = Bun.spawn({ cmd: [binary, ...args], stdout: "pipe", stderr: "pipe" });
+    const [code, stdout, stderr] = await Promise.all([
+        process.exited,
+        process.stdout ? new Response(process.stdout).text() : "",
+        process.stderr ? new Response(process.stderr).text() : "",
+    ]);
+    return { code, stdout, stderr };
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+    if (bytes.buffer instanceof ArrayBuffer) {
+        if (bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength) {
+            return bytes.buffer;
+        }
+        return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    }
+    return bytes.slice().buffer;
+}
+
+function encodeBase64(bytes: Uint8Array): string {
+    return Buffer.from(bytes).toString("base64");
 }

@@ -21,7 +21,7 @@ type Tiktokscraper7Response = {
 
 // https://rapidapi.com/tikwm-tikwm-default/api/tiktok-scraper7
 async function tiktokscraper7(url: string): Promise<Item[]> {
-    const key = Deno.env.get("RAPIDAPI_KEY");
+    const key = process.env["RAPIDAPI_KEY"];
     if (!key) {
         throw new Error("RapidAPI key not found");
     }
