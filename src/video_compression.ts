@@ -1,6 +1,6 @@
 import { join } from "path";
 
-export async function compressVideo(data: Uint8Array): Promise<Uint8Array> {
+export async function compressVideo(data: ArrayBuffer): Promise<ArrayBuffer> {
     // Locking mechanism to allow only one compression job at a time.
     console.info(`video compression: Started waiting for lock. Time: ${Date.now()}`);
     while (true) {
@@ -18,7 +18,7 @@ export async function compressVideo(data: Uint8Array): Promise<Uint8Array> {
         const filename_original = join(temp_dir, "video.mp4");
         const filename_compressed = join(temp_dir, "video_compressed.mp4");
 
-        await Deno.writeFile(filename_original, data);
+        await Deno.writeFile(filename_original, new Uint8Array(data));
         const original_info = await ffprobe(filename_original);
 
         // 4% of file size is reserved for muxing overhead
@@ -43,7 +43,10 @@ export async function compressVideo(data: Uint8Array): Promise<Uint8Array> {
         }
 
         const compressed_info = await ffprobe(filename_compressed);
-        const compressed_video = await Deno.readFile(filename_compressed);
+        const compressed_video_temp = await Deno.readFile(filename_compressed);
+        // convert it to ArrayBuffer
+        const compressed_video = compressed_video_temp.buffer.slice(compressed_video_temp.byteOffset, compressed_video_temp.byteOffset + compressed_video_temp.byteLength);
+
 
         // Comment this section to keep temporary files after compression for testing
         await Deno.remove(temp_dir, { recursive: true });

@@ -1,4 +1,4 @@
-import { createBot, Intents, type Message, type User } from "discordeno";
+import { Client, GatewayIntents, type Message } from "disgroove";
 import type { Item, SocialMedia, Task } from "./util.ts";
 
 import { extractInstagramContent } from "./instagram.ts";
@@ -16,44 +16,32 @@ if (!bot_token) {
     Deno.exit(1);
 }
 
-const bot = createBot({
-    intents: Intents.Guilds | Intents.MessageContent | Intents.GuildMessages,
-    token: bot_token,
-    desiredProperties: {
-        message: {
-            author: true,
-            channelId: true,
-            attachments: true,
-            id: true,
-            guildId: true,
-            content: true,
-            referencedMessage: true,
-        },
-        user: { id: true, username: true, discriminator: true },
-        attachment: { url: true, proxyUrl: true, id: true, filename: true, size: true, waveform: true, duration_secs: true },
-    },
-});
+const client = new Client(bot_token, {gateway: { intents:
+    GatewayIntents.Guilds |
+    GatewayIntents.MessageContent |
+    GatewayIntents.GuildMessages
+}});
 
 // Graceful shutdown.
-Deno.addSignalListener("SIGINT", async () => {
+Deno.addSignalListener("SIGINT", () => {
     console.info("Shutting down, please wait...");
-    await bot.shutdown();
+    client.disconnect();
     Deno.exit();
 });
 
 // Let bot owner know it's working.
-bot.events.ready = (payload: { user: User }): void => {
-    console.info(`Logged in as ${payload.user.tag}`);
-};
+client.once("ready", () => {
+    console.info(`Logged in as ${client.user?.username}`);
+});
 
-bot.events.messageCreate = handleMessage;
+client.once("messageCreate", handleMessage);
 
 // Connect to Gateway and start doing stuff.
-bot.start();
+client.connect();
 
 // Where all messages are handled.
 async function handleMessage(message: Message): Promise<void> {
-    if (message.author.id === bot.id) {
+    if (message.author.id === client.user?.id) {
         return;
     }
     if (!message.content) {
@@ -75,7 +63,7 @@ async function processTask(task: Task): Promise<void> {
 
     // Simple case. A single video.
     if (items.length === 1 && items[0].type === "video") {
-        await sendSingleVideo(task, items[0], bot);
+        await sendSingleVideo(task, items[0], client);
         return;
     }
 
@@ -85,7 +73,7 @@ async function processTask(task: Task): Promise<void> {
 
     // Complex case. Generate Slideshow and send it.
     if (items.length > 1 && audio) {
-        await sendSlideshow(task, items, bot);
+        await sendSlideshow(task, items, client);
         return;
     }
 

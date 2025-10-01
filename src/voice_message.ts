@@ -1,4 +1,4 @@
-import type { Message } from "discordeno";
+import type { Message } from "disgroove";
 import { encodeBase64 } from "base64";
 import { parse, join } from "path";
 
@@ -57,7 +57,7 @@ function volume(byte: number): number {
 }
 
 // NOTE: temporary workaround until discordeno properly supports voice messages
-export async function sendVoiceMessage(channel_id: bigint, path_to_audio_file: string, waveform: Uint8Array, duration: number): Promise<Message> {
+export async function sendVoiceMessage(channel_id: string, path_to_audio_file: string, waveform: Uint8Array, duration: number): Promise<Message> {
     const data = await Deno.readFile(path_to_audio_file);
     const form = new FormData();
     form.append("files[0]", new Blob([data], { type: "audio/ogg" }), "song.ogg");

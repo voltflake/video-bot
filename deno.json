@@ -1,6 +1,7 @@
 {
 	"imports": {
-		"discordeno": "npm:@discordeno/bot",
+		"discordeno": "npm:disgroove",
+		"disgroove": "npm:disgroove@^2.2.7",
 		"path": "jsr:@std/path",
 		"base64": "jsr:@std/encoding/base64"
 	},

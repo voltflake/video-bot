@@ -1,8 +1,8 @@
-import { type Bot, MessageFlags } from "discordeno";
+import { type Client, MessageFlags } from "disgroove";
 import type { Item, Task } from "./util.ts";
 import { compressVideo } from "./video_compression.ts";
 
-export async function sendSingleVideo(task: Task, item: Item, bot: Bot): Promise<void> {
+export async function sendSingleVideo(task: Task, item: Item, client: Client): Promise<void> {
     // Video is too large.
     if (item.size >= 100 * 1024 * 1024) {
         throw new Error("Video is too big to even try to compress it");
@@ -18,9 +18,10 @@ export async function sendSingleVideo(task: Task, item: Item, bot: Bot): Promise
         }
 
         try {
-            await bot.helpers.sendMessage(task.message.channelId, {
-                files: [{ blob: new Blob([video]), name: "video.mp4" }],
-                messageReference: { messageId: task.message.id, failIfNotExists: true },
+            video = new ArrayBuffer(video.byteLength);
+            await client.createMessage(task.message.channelID, {
+                files: [{ contents: new Blob([video], { type: "video/mp4" }), name: "video.mp4" }],
+                messageReference: { messageID: task.message.id, failIfNotExists: true },
                 allowedMentions: { repliedUser: false },
             });
         } catch {
@@ -29,7 +30,7 @@ export async function sendSingleVideo(task: Task, item: Item, bot: Bot): Promise
 
         if (task.type !== "YouTube") {
             try {
-                await bot.helpers.editMessage(task.message.channelId, task.message.id, {
+                await client.editMessage(task.message.channelID, task.message.id, {
                     flags: MessageFlags.SuppressEmbeds,
                 });
             } catch {
@@ -42,9 +43,9 @@ export async function sendSingleVideo(task: Task, item: Item, bot: Bot): Promise
     const video = await downloadVideo(item.url);
 
     try {
-        await bot.helpers.sendMessage(task.message.channelId, {
-            files: [{ blob: new Blob([video]), name: "video.mp4" }],
-            messageReference: { messageId: task.message.id, failIfNotExists: true },
+        await client.createMessage(task.message.channelID, {
+            files: [{ contents: new Blob([video], { type: "video/mp4" }), name: "video.mp4" }],
+            messageReference: { messageID: task.message.id, failIfNotExists: true },
             allowedMentions: { repliedUser: false },
         });
     } catch {
@@ -53,7 +54,7 @@ export async function sendSingleVideo(task: Task, item: Item, bot: Bot): Promise
 
     if (task.type !== "YouTube") {
         try {
-            await bot.helpers.editMessage(task.message.channelId, task.message.id, {
+            await client.editMessage(task.message.channelID, task.message.id, {
                 flags: MessageFlags.SuppressEmbeds,
             });
         } catch {
@@ -62,6 +63,6 @@ export async function sendSingleVideo(task: Task, item: Item, bot: Bot): Promise
     }
 }
 
-async function downloadVideo(url: string): Promise<Uint8Array> {
-    return await (await fetch(url)).bytes();
+async function downloadVideo(url: string): Promise<ArrayBuffer> {
+    return await (await fetch(url)).arrayBuffer();
 }

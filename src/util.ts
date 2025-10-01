@@ -1,4 +1,4 @@
-import type { Message } from "discordeno";
+import type { Message } from "disgroove";
 
 export type ContentType = "image" | "video" | "audio";
 export type SocialMedia = "TikTok" | "Instagram" | "YouTube" | "YouTubeShorts";

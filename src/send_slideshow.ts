@@ -1,10 +1,10 @@
-import { type Bot, type FileContent, type Message, MessageFlags } from "discordeno";
+import { type Client, type Message, MessageFlags, type FileData } from "disgroove";
 
 import type { Item, Task } from "./util.ts";
 import { convertToProperCodec, getAudioData, sendVoiceMessage } from "./voice_message.ts";
 import { createSlideshowVideo } from "./slideshow_video.ts";
 
-export async function sendSlideshow(task: Task, items: Item[], bot: Bot): Promise<void> {
+export async function sendSlideshow(task: Task, items: Item[], client: Client): Promise<void> {
     const audio_item = items.find((item) => item.type === "audio");
     if (!audio_item) {
         throw new Error("Cannot generate slideshow video without audio provided");
@@ -31,27 +31,27 @@ export async function sendSlideshow(task: Task, items: Item[], bot: Bot): Promis
         images.push(image_data);
         image_count += 1;
     }
-    const filecontent_arr: FileContent[] = [];
+    const filecontent_arr: FileData[] = [];
     for (const [i, data] of images.entries()) {
-        filecontent_arr.push({ blob: new Blob([data]), name: `SPOILER_image${i + 1}.png` });
+        filecontent_arr.push({ contents: new Blob([new Uint8Array(data)], { type: "image/png" }), name: `SPOILER_image${i + 1}.png` });
     }
 
-    const status_message = await bot.helpers.sendMessage(task.message.channelId, {
+    const status_message = await client.createMessage(task.message.channelID, {
         content: "\u{23f3} Generating slideshow video...",
         files: filecontent_arr,
-        messageReference: { messageId: task.message.id, failIfNotExists: true },
+        messageReference: { messageID: task.message.id, failIfNotExists: true },
         allowedMentions: { repliedUser: false },
     });
 
     let voice_message: Message | undefined;
     try {
-        voice_message = await sendVoiceMessage(task.message.channelId, ogg_filename, audio_info.waveform, audio_info.duration);
+        voice_message = await sendVoiceMessage(task.message.channelID, ogg_filename, audio_info.waveform, audio_info.duration);
     } catch {
         console.error("sendSlideshow(): Failed to send voice message");
     }
 
     try {
-        await bot.helpers.editMessage(task.message.channelId, task.message.id, {
+        await client.editMessage(task.message.channelID, task.message.id, {
             flags: MessageFlags.SuppressEmbeds,
         });
     } catch {
@@ -65,9 +65,9 @@ export async function sendSlideshow(task: Task, items: Item[], bot: Bot): Promis
     }
 
     try {
-        await bot.helpers.editMessage(task.message.channelId, status_message.id, {
+        await client.editMessage(task.message.channelID, status_message.id, {
             content: "",
-            files: [{ blob: new Blob([created_video]), name: "slideshow.mp4" }],
+            files: [{ contents: new Blob([new Uint8Array(created_video)]), name: "slideshow.mp4" }],
             allowedMentions: { repliedUser: false },
         });
     } catch {
@@ -76,7 +76,7 @@ export async function sendSlideshow(task: Task, items: Item[], bot: Bot): Promis
 
     if (voice_message) {
         try {
-            await bot.helpers.deleteMessage(status_message.channelId, voice_message.id);
+            await client.deleteMessage(status_message.channelID, voice_message.id);
         } catch {
             console.error("sendSlideshow(): Failed to remove voice message. It was probably deleted by someone.")
         }
