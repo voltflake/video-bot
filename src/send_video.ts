@@ -45,6 +45,7 @@ export async function sendSingleVideo(content: Content, client: Client, message:
     const video = await video_file.arrayBuffer();
 
     await client.editMessage(message.channelID, message.id, {
+        content: "",
         files: [{ contents: new Blob([video], { type: "video/mp4" }), name: "video.mp4" }],
         allowedMentions: { repliedUser: false },
     });
