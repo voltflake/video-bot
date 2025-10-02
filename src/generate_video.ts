@@ -1,42 +1,26 @@
 import type { Item } from "./util.ts";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 // WARNING: h264_v4l2m2m encoder on rpi4 can fail on bigger resolutions
 // 756x1344 is maximum for 9:16 aspect ratio (4096 16pixel blocks) for 60fps
 // or 1080p@30 max
-
-// WARNING: libx264 doesn't encode resolutions that are not divisible by 2
-
-export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
+// Only for posts without video items
+export async function createSlideshowVideo(items: Item[]): Promise<string> {
     let codec = "libx264";
-    const prefered_codec =  process.env["CODEC"];
-    if (prefered_codec) {
-        codec = prefered_codec;
+    let video_count = items.filter((item) => item.type === "video").length;
+    if (video_count > 0) {
+        throw new Error("createSlideshowVideo() called with video items present");
     }
-
-    const temp_dir = await mkdtemp(join(tmpdir(), "video-bot-"));
-
-    // download all required assets
-    let image_count = 0;
-    const audio_filename = join(temp_dir, "audio.mp3");
-    for (const [index, item] of items.entries()) {
-        const data = new Uint8Array(await (await fetch(item.url)).arrayBuffer());
-        if (item.type === "image") {
-            image_count += 1;
-            // TODO: Do not assume all pictures are .png files.
-            await writeFile(join(temp_dir, `image${index}.png`), data);
-        }
-        if (item.type === "audio") {
-            await writeFile(audio_filename, data);
-        }
+    const audio_filename = items.find((item) => item.type === "audio")?.filepath;
+    if (!audio_filename) {
+        throw new Error("Cannot generate slideshow video without audio provided");
     }
+    let image_paths = [...items.filter((item) => item.type === "image").map((item) => item.filepath)];
+    let image_count = image_paths.length;
 
     // Get image resolutions.
     const image_resolutions: { width: number; height: number }[] = [];
-    for (let i = 0; i < image_count; i++) {
-        const { code, stdout } = await runCommand(["magick", "identify", join(temp_dir, `image${i + 1}.png`)]);
+    for (const path of image_paths) {
+        const { code, stdout } = await runCommand(["magick", "identify", path]);
         if (code !== 0) {
             throw new Error("magick identify exited with non 0 code");
         }
@@ -76,6 +60,7 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
     }
     let selected_width = Math.floor(max_height * max_aspect_ratio);
 
+    // WARNING: libx264 doesn't encode odd resolutions
     if (codec === "libx264") {
         if (selected_width % 2 === 1) {
             selected_width -= 1;
@@ -86,11 +71,11 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
     }
 
     // scale each image
-    for (let i = 0; i < image_count; i++) {
+    for (const [i, path] of image_paths.entries()) {
         const { code, stderr } = await runCommand([
             "magick",
             "convert",
-            join(temp_dir, `image${i + 1}.png`),
+            path,
             "-resize",
             `${selected_width}x${max_height}`,
             "-background",
@@ -99,7 +84,7 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
             "center",
             "-extent",
             `${selected_width}x${max_height}`,
-            join(temp_dir, `image${i + 1}-scaled.png`),
+            `${path}-scaled.png`,
         ]);
         if (code !== 0) {
             console.error("magick convert output -->");
@@ -123,7 +108,7 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
             "-framerate",
             "60",
             "-i",
-            join(temp_dir, "image1-scaled.png"),
+            `${image_paths[0]}-scaled.png`,
             "-c:v",
             codec,
             "-pix_fmt",
@@ -132,7 +117,7 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
             "60",
             "-frames",
             `${loop_duration}`,
-            join(temp_dir, "slideshow_loop.mp4"),
+            `${image_paths[0]}-slideshow-loop.mp4`,
         ]);
         if (code !== 0) {
             console.error("(ffmpeg 1 image slideshow loop generation) output -->");
@@ -141,8 +126,8 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
         }
     } else {
         const ffmpeg_args: string[] = ["ffmpeg"];
-        for (let i = 0; i < image_count; i++) {
-            ffmpeg_args.push("-loop", "1", "-framerate", "60", "-i", join(temp_dir, `image${i + 1}-scaled.png`));
+        for (const path of image_paths) {
+            ffmpeg_args.push("-loop", "1", "-framerate", "60", "-i", `${path}-scaled.png`);
         }
         ffmpeg_args.push("-filter_complex");
 
@@ -164,7 +149,7 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
         }
         complex_filter = complex_filter.slice(0, -1);
         ffmpeg_args.push(complex_filter);
-        ffmpeg_args.push("-map", `[m${current_filter_result}]`, "-c:v", codec, "-pix_fmt", "yuv420p", "-r", "60", "-frames", `${loop_duration}`, join(temp_dir, "slideshow_loop.mp4"));
+        ffmpeg_args.push("-map", `[m${current_filter_result}]`, "-c:v", codec, "-pix_fmt", "yuv420p", "-r", "60", "-frames", `${loop_duration}`, `${image_paths[0]}-slideshow-loop.mp4`);
 
         const { code, stderr } = await runCommand(ffmpeg_args);
         if (code !== 0) {
@@ -181,7 +166,7 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
         "-stream_loop",
         "-1",
         "-i",
-        join(temp_dir, "slideshow_loop.mp4"),
+        `${image_paths[0]}-slideshow-loop.mp4`,
         "-i",
         audio_filename,
         "-shortest",
@@ -193,7 +178,7 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
         "yuv420p",
         "-movflags",
         "+faststart",
-        join(temp_dir, "slideshow.mp4"),
+        `${image_paths[0]}-slideshow.mp4`,
     ];
     const { code, stderr } = await runCommand(ffmpeg_args);
     if (code !== 0) {
@@ -202,10 +187,7 @@ export async function createSlideshowVideo(items: Item[]): Promise<Uint8Array> {
         throw new Error("ffmpeg exited with non 0 code. (ffmpeg final slideshow generation)");
     }
 
-    const result = await readFile(join(temp_dir, "slideshow.mp4"));
-    await rm(temp_dir, { recursive: true, force: true });
-
-    return result;
+    return `${image_paths[0]}-slideshow.mp4`;
 }
 
 async function runCommand(cmd: string[]): Promise<{ code: number; stdout: string; stderr: string }> {

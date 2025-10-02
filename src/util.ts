@@ -1,18 +1,16 @@
 import type { Message } from "disgroove";
 
-export type ContentType = "image" | "video" | "audio";
-export type SocialMedia = "TikTok" | "Instagram" | "YouTube" | "YouTubeShorts";
+export type FileType = "image" | "video" | "audio";
+export type ContentType = "gallery" | "video";
 
-export type Item = {
+export type Content = {
     type: ContentType;
-    url: string;
-    size: number;
+    items: Item[];
 };
 
-export type Task = {
-    message: Message;
-    url: string;
-    type: SocialMedia;
+export type Item = {
+    filepath: string;
+    type: FileType;
 };
 
 export async function getContentLength(url: string): Promise<number> {
