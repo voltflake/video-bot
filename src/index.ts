@@ -1,5 +1,4 @@
 import { Client, GatewayIntents, type Message } from "disgroove";
-import type { Content } from "./util.ts";
 import { sendSingleVideo } from "./send_video.ts";
 import { sendGallery } from "./send_gallery.ts";
 import { extractWithYtdlp } from "./yt-dlp.ts"
@@ -26,12 +25,12 @@ process.on("SIGINT", () => {
     process.exit(0);
 });
 
-client.once("ready", () => {
+client.on("ready", () => {
     console.info(`Logged in as ${client.user?.username}`);
 });
 
 // Where all messages are handled
-client.once("messageCreate", async (message: Message): Promise<void> => {
+client.on("messageCreate", async (message: Message): Promise<undefined> => {
     if (message.author.id === client.user?.id) return;
     if (!message.content) return;
 
@@ -40,7 +39,7 @@ client.once("messageCreate", async (message: Message): Promise<void> => {
     if (!url) return;
 
     // Start yt-dlp task
-    let extracted_content_promise = extractWithYtdlp(url.href);
+    let extracted_content_promise = extractWithYtdlp(url);
 
     // Start reporting status
     const response_message = await client.createMessage(message.channelID, {
@@ -53,15 +52,15 @@ client.once("messageCreate", async (message: Message): Promise<void> => {
     let extracted_content = await extracted_content_promise;
     if (extracted_content) {
         if (extracted_content.type === "video") {
-            await sendSingleVideo(extracted_content, client, message);
+            await sendSingleVideo(extracted_content, client, response_message);
         } else {
-            await sendGallery(extracted_content, client, message);
+            await sendGallery(extracted_content, client, response_message);
         }
         return;
     }
 
     // Start gallery-dl task if yt-dlp failed
-    extracted_content_promise = extractWithGallerydl(url.href);
+    extracted_content_promise = extractWithGallerydl(url);
 
     // Update status
     await client.editMessage(response_message.channelID, response_message.id, {
@@ -73,9 +72,9 @@ client.once("messageCreate", async (message: Message): Promise<void> => {
     extracted_content = await extracted_content_promise;
     if (extracted_content) {
         if (extracted_content.type === "video") {
-            await sendSingleVideo(extracted_content, client, message);
+            await sendSingleVideo(extracted_content, client, response_message);
         } else {
-            await sendGallery(extracted_content, client, message);
+            await sendGallery(extracted_content, client, response_message);
         }
         return;
     }

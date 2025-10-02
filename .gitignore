@@ -1,2 +1,6 @@
+.vscode
+downloader_env
+downloads
 node_modules
-.env
+cookies.txt
+start.sh

@@ -5,11 +5,6 @@ import { createSlideshowVideo } from "./generate_video.ts";
 
 // TODO: refactor to threat posts with videos differently from slideshows
 export async function sendGallery(content: Content, client: Client, message: Message): Promise<void> {
-    const audio_item = content.items.find((item) => item.type === "audio");
-    if (!audio_item) return undefined;
-    const ogg_filename = await convertToProperCodec(audio_item.filepath);
-    const audio_info = await getAudioData(ogg_filename);
-
     let items_processed = 0;
     const filecontent_arr: FileData[] = [];
     for (const [i, item] of content.items.entries()) {
@@ -24,20 +19,31 @@ export async function sendGallery(content: Content, client: Client, message: Mes
         filecontent_arr.push({ contents: new Blob([image_data], { type: "image/png" }), name: `SPOILER_image${i + 1}.png` });
     }
 
-    const status_message = await client.editMessage(message.channelID, message.id, {
-        content: "Generating slideshow video...",
+    await client.editMessage(message.channelID, message.id, {
+        content: "",
         files: filecontent_arr,
         allowedMentions: { repliedUser: false },
     });
-
-    // Send voice message with audio
-    const voice_message = await sendVoiceMessage(message.channelID, ogg_filename, audio_info.waveform, audio_info.duration);
 
     // suppress embeds in original message
     await client.editMessage(message.channelID, message.referencedMessage?.id!, {
         flags: MessageFlags.SuppressEmbeds,
     });
 
+    // Send voice message with audio if it exists
+    const audio_item = content.items.find((item) => item.type === "audio");
+    if (!audio_item) return undefined;
+    const ogg_filename = await convertToProperCodec(audio_item.filepath);
+    const audio_info = await getAudioData(ogg_filename);
+    const voice_message = await sendVoiceMessage(message.channelID, ogg_filename, audio_info.waveform, audio_info.duration);
+
+    await client.editMessage(message.channelID, message.id, {
+        content: "Generating slideshow video...",
+        files: filecontent_arr,
+        allowedMentions: { repliedUser: false },
+    });
+
+    // Generate slideshow video if gallery consists of images and audio only
     const created_video_path = await createSlideshowVideo(content.items);
     const created_video = await Bun.file(created_video_path).arrayBuffer();
 
@@ -56,7 +62,7 @@ export async function sendGallery(content: Content, client: Client, message: Mes
 
     if (voice_message) {
         try {
-            client.deleteMessage(status_message.channelID, voice_message.id);
+            client.deleteMessage(message.channelID, voice_message.id);
         } catch {}
     }
 }
