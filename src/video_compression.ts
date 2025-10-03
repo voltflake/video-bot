@@ -1,3 +1,5 @@
+import { toMbString } from "./util";
+
 export async function compressVideo(filename_original: string): Promise<string> {
     // Locking mechanism to allow only one compression job at a time.
     console.info(`video compression: Started waiting for lock. Time: ${Date.now()}`);
@@ -46,12 +48,12 @@ export async function compressVideo(filename_original: string): Promise<string> 
 
         console.info(`ffmpeg info: ${ffmpeg_args}`);
         console.info(`video duration: ${video_duration.toFixed(2)}s`);
-        console.info(`original file size: ${toMbString(uncompressed_video_file.size / (1024 * 1024))}`);
+        console.info(`original file size: ${toMbString(uncompressed_video_file.size)}`);
         console.info(`original video stream: bitrate=${original_info.video_bitrate} `);
         console.info(`size=${toMbString(video_duration * original_info.video_bitrate * 8)}`);
         console.info(`original audio stream: bitrate=${original_info.audio_bitrate} `);
         console.info(`size=${toMbString(video_duration * original_info.audio_bitrate * 8)}`);
-        console.info(`resulted file size: ${toMbString(compressed_video_file.size / (1024 * 1024))}`);
+        console.info(`resulted file size: ${toMbString(compressed_video_file.size)}`);
         console.info(`resulted video stream: bitrate=${compressed_info.video_bitrate} `);
         console.info(`size=${toMbString(video_duration * compressed_info.video_bitrate * 8)}`);
         console.info(`resulted audio stream: bitrate=${compressed_info.audio_bitrate} `);
@@ -61,10 +63,6 @@ export async function compressVideo(filename_original: string): Promise<string> 
     } finally {
         delete process.env["COMPRESSING_IN_PROCESS"];
     }
-}
-
-function toMbString(bytes: number): string {
-    return `${(bytes / 1024 * 1024).toFixed(2)}MB`;
 }
 
 async function ffprobe(filename: string): Promise<{ duration_in_seconds: number; video_bitrate: number; audio_bitrate: number }> {

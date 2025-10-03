@@ -1,5 +1,5 @@
 import { type Client, MessageFlags, type Message } from "disgroove";
-import type { Content } from "./util.ts";
+import { toMbString, type Content } from "./util.ts";
 import { compressVideo } from "./video_compression.ts";
 
 export async function sendSingleVideo(content: Content, client: Client, message: Message): Promise<void> {
@@ -19,19 +19,27 @@ export async function sendSingleVideo(content: Content, client: Client, message:
 
     // Video is in compressable size range. Try to compress
     if (video_size > 10 * 1024 * 1024) {
+
+        const status_update = client.editMessage(message.channelID, message.id, {
+            content: `Compressing video... (~${toMbString(video_size)}).`,
+            allowedMentions: { repliedUser: false },
+        });
+
         const compressed_video = await compressVideo(video_path);
+        await status_update;
         const compressed_video_file = Bun.file(compressed_video);
 
         if (compressed_video_file.size > 10 * 1024 * 1024) {
             await client.editMessage(message.channelID, message.id, {
-                content: `❌ Video is too large to be sent to Discord even after compression (~${compressed_video_file.size/1_000_000}MB).`,
+                content: `❌ Video is too large to be sent to Discord even after compression (~${toMbString(compressed_video_file.size)}).`,
                 allowedMentions: { repliedUser: false },
             });
             return;
         }
 
         await client.editMessage(message.channelID, message.id, {
-            files: [{ contents: new Blob([compressed_video], { type: "video/mp4" }), name: "video.mp4" }],
+            content: "",
+            files: [{ contents: new Blob([await compressed_video_file.arrayBuffer()], { type: "video/mp4" }), name: "video.mp4" }],
             allowedMentions: { repliedUser: false },
         });
 

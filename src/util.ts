@@ -13,6 +13,10 @@ export type Item = {
     type: FileType;
 };
 
+export function toMbString(bytes: number): string {
+    return `${(bytes / (1024 * 1024)).toFixed(2)}MiB`;
+}
+
 export async function getContentLength(url: string): Promise<number> {
     try {
         const response = await fetch(url, { method: "HEAD" });
