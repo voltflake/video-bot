@@ -5,7 +5,7 @@ export async function extractWithYtdlp(url: URL): Promise<Content | undefined> {
     try {
         await mkdir("downloads", { recursive: true });
         const process = Bun.spawn(
-            ["yt-dlp", "--quiet", "--no-warnings", "--print", "after_move:%(filepath)s", "--max-filesize", "100M", url.href],
+            ["yt-dlp", "--quiet", "--no-warnings", "--print", "after_move:%(filepath)s", "--max-filesize", "100M", "--cookies", "../cookies.txt", url.href],
             { cwd: "downloads" }
         );
         if (await process.exited !== 0) return undefined;
