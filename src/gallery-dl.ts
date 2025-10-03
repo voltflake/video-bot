@@ -4,8 +4,14 @@ import { mkdir } from "node:fs/promises";
 export async function extractWithGallerydl(url: URL): Promise<Content | undefined> {
     try {
         await mkdir("downloads", { recursive: true });
+        let target_href = url.href;
+        if (url.pathname.startsWith("/share/")) {
+            if (!(url.pathname.startsWith("/share/p/") || url.pathname.startsWith("/share/reel/"))) {
+                target_href = url.href.replace("/share/", "/share/p/");
+            }
+        }
         const process = Bun.spawn(
-            ["gallery-dl", "--cookies", "../cookies.txt", "-d", ".", "-o", 'filename="{filename}.{extension}"', "--filesize-max", "50M", url.href],
+            ["gallery-dl", "--cookies", "../cookies.txt", "-d", ".", "-o", 'filename="{filename}.{extension}"', "--filesize-max", "50M", target_href],
             { cwd: "downloads" }
         );
         if (await process.exited !== 0) return undefined;
