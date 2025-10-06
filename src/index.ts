@@ -87,9 +87,6 @@ client.on("messageCreate", async (message: Message): Promise<undefined> => {
     return;
 });
 
-// Actually start bot
-client.connect();
-
 function extractURL(text: string): URL | undefined {
     // Improved regex to match more URL formats (optional schemes, handles common cases)
     const urlRegex = /https?:\/\/[^\s]+/gi;
@@ -109,3 +106,6 @@ function extractURL(text: string): URL | undefined {
     }
     return undefined;
 } 
+
+// Actually start bot
+client.connect();

@@ -10,7 +10,7 @@ export async function sendSingleVideo(content: Content, client: Client, message:
     const video_size = video_file.size;
 
     // Video is too large
-    if (video_size >= 50 * 1024 * 1024) {
+    if (video_size >= 30 * 1024 * 1024) {
         await client.editMessage(message.channelId, message.id, {
             content: `❌ Video is too large to be sent to Discord (~${video_size/1_000_000}MB).`,
             allowedMentions: { repliedUser: false },

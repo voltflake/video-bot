@@ -31,7 +31,7 @@ export async function runCommand(cmd: string[], cwd?: string): Promise<{ stdout:
 
     let proc;
     if (cwd) {
-        proc = await execFile(binary, args, { cwd: "downloads" });
+        proc = await execFile(binary, args, { cwd });
     } else {
         proc = await execFile(binary, args);
     }

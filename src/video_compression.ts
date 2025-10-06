@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { runCommand, toMbString } from "./util.ts";
 
 export async function compressVideo(filename_original: string): Promise<string> {
@@ -19,14 +19,12 @@ export async function compressVideo(filename_original: string): Promise<string> 
 
         const original_info = await ffprobe(filename_original);
 
-        // 4% of file size is reserved for muxing overhead
-        const available_bits_per_second = (10 * 1024 * 1024 * 8 * 0.96) / original_info.duration_in_seconds;
-
-        // Leave 10% of maximum video stream size just to be sure codec won't exceed hard size limit
+        // 7% of file size is reserved for overhead so that file doesn't exceed Discord upload limit
         // Note that Raspberry Pi with h264_omx codec can't hv-encode videos with bitrate less than 150kb/s
-        const required_video_bitrate = Math.floor((available_bits_per_second - original_info.audio_bitrate) * 0.9);
+        const available_bits_per_second = (10 * 1024 * 1024 * 8 * 0.93) / original_info.duration_in_seconds;
+        const required_video_bitrate = Math.floor(available_bits_per_second - 96_000);
 
-        const ffmpeg_args = ["-i", `${filename_original}`, "-y", "-c:a", "copy", "-b:v", `${required_video_bitrate.toString()}`];
+        const ffmpeg_args = ["-i", `${filename_original}`, "-y", "-c:a", "aac", "-b:a", "96K", "-b:v", `${required_video_bitrate.toString()}`];
 
         ffmpeg_args.push("-c:v");
         ffmpeg_args.push("libx264");
@@ -46,14 +44,14 @@ export async function compressVideo(filename_original: string): Promise<string> 
         console.info(`video duration: ${video_duration.toFixed(2)}s`);
         console.info(`original file size: ${toMbString(uncompressed_video_file.byteLength)}`);
         console.info(`original video stream: bitrate=${original_info.video_bitrate} `);
-        console.info(`size=${toMbString(video_duration * original_info.video_bitrate * 8)}`);
+        console.info(`size=${toMbString(video_duration * original_info.video_bitrate / 8)}`);
         console.info(`original audio stream: bitrate=${original_info.audio_bitrate} `);
-        console.info(`size=${toMbString(video_duration * original_info.audio_bitrate * 8)}`);
+        console.info(`size=${toMbString(video_duration * original_info.audio_bitrate / 8)}`);
         console.info(`resulted file size: ${toMbString(compressed_video_file.byteLength)}`);
         console.info(`resulted video stream: bitrate=${compressed_info.video_bitrate} `);
-        console.info(`size=${toMbString(video_duration * compressed_info.video_bitrate * 8)}`);
+        console.info(`size=${toMbString(video_duration * compressed_info.video_bitrate / 8)}`);
         console.info(`resulted audio stream: bitrate=${compressed_info.audio_bitrate} `);
-        console.info(`size=${toMbString(video_duration * compressed_info.audio_bitrate * 8)}`);
+        console.info(`size=${toMbString(video_duration * compressed_info.audio_bitrate / 8)}`);
         console.info(`ffmpeg cbr error: ${cbr_bitrate_error_percentage.toFixed(2)}%`);
         return filename_compressed;
     } finally {
@@ -62,13 +60,35 @@ export async function compressVideo(filename_original: string): Promise<string> 
 }
 
 async function ffprobe(filename: string): Promise<{ duration_in_seconds: number; video_bitrate: number; audio_bitrate: number }> {
+    const file_info = await stat(filename);
     const { stdout } = await runCommand(["ffprobe", "-v", "quiet", "-print_format", "json", "-show_streams", `${filename}`]);
     const data = JSON.parse(stdout);
+    const audio_bitrate = 128000; // Assume 128kbps because otherwise is too complicated
     const video_stream = data.streams.find((stream: { codec_type: string }) => stream.codec_type === "video");
-    const video_bitrate = Number.parseInt(video_stream.bit_rate);
-    const audio_stream = data.streams.find((stream: { codec_type: string }) => stream.codec_type === "audio");
-    const audio_bitrate = Number.parseInt(audio_stream.bit_rate);
-    const duration_in_seconds = Number.parseFloat(video_stream.duration);
+    let video_bitrate = undefined;
+    let duration_in_seconds = video_stream.duration ? Number.parseFloat(video_stream.duration) : undefined;
+    if(!duration_in_seconds) {
+        const duration_tag = video_stream.tags["DURATION"];
+        if (!duration_tag) {
+            throw new Error("Error when parsing video bitrate from ffprobe output");
+        }
+        const time_parts = duration_tag.split(":");
+        if (time_parts.length !== 3) {
+            throw new Error("Error when parsing video bitrate from ffprobe output");
+        }
+        const hours = Number.parseInt(time_parts[0]);
+        const minutes = Number.parseInt(time_parts[1]);
+        const seconds = Number.parseFloat(time_parts[2]);
+        duration_in_seconds = hours * 3600 + minutes * 60 + seconds;
+        if (isNaN(duration_in_seconds) || duration_in_seconds === 0) {
+            throw new Error("Error when parsing video bitrate from ffprobe output");
+        }
+    }
+    if (video_stream.bit_rate) {
+        video_bitrate = Number.parseInt(video_stream.bit_rate);
+    } else {
+        video_bitrate = file_info.size * 8 / duration_in_seconds - audio_bitrate;
+    }
     return {
         duration_in_seconds: duration_in_seconds,
         video_bitrate: video_bitrate,
