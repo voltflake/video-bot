@@ -42,9 +42,9 @@ client.on("messageCreate", async (message: Message): Promise<undefined> => {
     let extracted_content_promise = extractWithYtdlp(url);
 
     // Start reporting status
-    const response_message = await client.createMessage(message.channelID, {
+    const response_message = await client.createMessage(message.channelId, {
         content: `Extracting content from ${url.hostname}, please wait...`,
-        messageReference: {messageID: message.id},
+        messageReference: {messageId: message.id},
         allowedMentions: {repliedUser: false}
     });
 
@@ -63,7 +63,7 @@ client.on("messageCreate", async (message: Message): Promise<undefined> => {
     extracted_content_promise = extractWithGallerydl(url);
 
     // Update status
-    await client.editMessage(response_message.channelID, response_message.id, {
+    await client.editMessage(response_message.channelId, response_message.id, {
         content: `Trying more sophisticated methods...`,
         allowedMentions: {repliedUser: false}
     });
@@ -80,7 +80,7 @@ client.on("messageCreate", async (message: Message): Promise<undefined> => {
     }
 
     // All methods failed
-    await client.editMessage(response_message.channelID, response_message.id, {
+    await client.editMessage(response_message.channelId, response_message.id, {
         content: `Sorry, I couldn't extract content from this link...`,
         allowedMentions: {repliedUser: false}
     });

@@ -1,4 +1,4 @@
-import type { Item } from "./util.ts";
+import { runCommand, type Item } from "./util.ts";
 
 // WARNING: h264_v4l2m2m encoder on rpi4 can fail on bigger resolutions
 // 756x1344 is maximum for 9:16 aspect ratio (4096 16pixel blocks) for 60fps
@@ -20,23 +20,22 @@ export async function createSlideshowVideo(items: Item[]): Promise<string> {
     // Get image resolutions.
     const image_resolutions: { width: number; height: number }[] = [];
     for (const path of image_paths) {
-        const { code, stdout } = await runCommand(["magick", "identify", path]);
-        if (code !== 0) {
-            throw new Error("magick identify exited with non 0 code");
+        try {
+            const proc = await runCommand(["magick", "identify", path]);
+            const match = proc.stdout.match(/(?<width>\d+)x(?<height>\d+)/);
+            if (!match) {
+                throw new Error("No matches found when using regex on magick identify output");
+            }
+            if (!match.groups) {
+                throw new Error("No groups were found in matches found when using regex on magick identify output");
+            }
+            image_resolutions.push({
+                width: Number.parseInt(match.groups["width"]!),
+                height: Number.parseInt(match.groups["height"]!),
+            });
+        } catch (error) {
+            throw new Error("magick identify step failed");
         }
-
-        const match = stdout.match(/(?<width>\d+)x(?<height>\d+)/);
-
-        if (!match) {
-            throw new Error("No matches found when using regex on magick identify output");
-        }
-        if (!match.groups) {
-            throw new Error("No groups were found in matches found when using regex on magick identify output");
-        }
-        image_resolutions.push({
-            width: Number.parseInt(match.groups["width"]!),
-            height: Number.parseInt(match.groups["height"]!),
-        });
     }
 
     // calculate scaling, size and target aspect ratio
@@ -71,8 +70,9 @@ export async function createSlideshowVideo(items: Item[]): Promise<string> {
     }
 
     // scale each image
-    for (const [i, path] of image_paths.entries()) {
-        const { code, stderr } = await runCommand([
+    for (const path of image_paths) {
+        try {
+            await runCommand([
             "magick",
             "convert",
             path,
@@ -86,9 +86,7 @@ export async function createSlideshowVideo(items: Item[]): Promise<string> {
             `${selected_width}x${max_height}`,
             `${path}-scaled.png`,
         ]);
-        if (code !== 0) {
-            console.error("magick convert output -->");
-            console.error(stderr);
+        } catch (error) {
             throw new Error("magick convert exited with non 0 code");
         }
     }
@@ -101,31 +99,23 @@ export async function createSlideshowVideo(items: Item[]): Promise<string> {
 
     const loop_duration = Math.ceil((slide_duration + transition_duration) * image_count * 60);
     if (image_count === 1) {
-        const { code, stderr } = await runCommand([
-            "ffmpeg",
-            "-loop",
-            "1",
-            "-framerate",
-            "60",
-            "-i",
-            `${image_paths[0]}-scaled.png`,
-            "-c:v",
-            codec,
-            "-pix_fmt",
-            "yuv420p",
-            "-r",
-            "60",
-            "-frames",
-            `${loop_duration}`,
-            `${image_paths[0]}-slideshow-loop.mp4`,
-        ]);
-        if (code !== 0) {
-            console.error("(ffmpeg 1 image slideshow loop generation) output -->");
-            console.error(stderr);
+        try {
+            await runCommand([
+                "ffmpeg", "-y",
+                "-loop", "1",
+                "-framerate", "60",
+                "-i", `${image_paths[0]}-scaled.png`,
+                "-c:v", codec,
+                "-pix_fmt", "yuv420p",
+                "-r", "60",
+                "-frames", `${loop_duration}`,
+                `${image_paths[0]}-slideshow-loop.mp4`,
+            ]);
+        } catch (error) {
             throw new Error("ffmpeg exited with non 0 code. (ffmpeg 1 image slideshow loop generation)");
         }
     } else {
-        const ffmpeg_args: string[] = ["ffmpeg"];
+        const ffmpeg_args: string[] = ["ffmpeg", "-y"];
         for (const path of image_paths) {
             ffmpeg_args.push("-loop", "1", "-framerate", "60", "-i", `${path}-scaled.png`);
         }
@@ -151,17 +141,16 @@ export async function createSlideshowVideo(items: Item[]): Promise<string> {
         ffmpeg_args.push(complex_filter);
         ffmpeg_args.push("-map", `[m${current_filter_result}]`, "-c:v", codec, "-pix_fmt", "yuv420p", "-r", "60", "-frames", `${loop_duration}`, `${image_paths[0]}-slideshow-loop.mp4`);
 
-        const { code, stderr } = await runCommand(ffmpeg_args);
-        if (code !== 0) {
-            console.error("(ffmpeg 2 or more images slideshow loop generation) output -->");
-            console.error(stderr);
+        try {
+            await runCommand(ffmpeg_args);
+        } catch (error) {
             throw new Error("ffmpeg exited with non 0 code. (ffmpeg 2 or more images slideshow loop generation)");
         }
     }
 
     // create final video with music
     const ffmpeg_args: string[] = [
-        "ffmpeg",
+        "ffmpeg", "-y",
         "-hide_banner",
         "-stream_loop",
         "-1",
@@ -180,30 +169,12 @@ export async function createSlideshowVideo(items: Item[]): Promise<string> {
         "+faststart",
         `${image_paths[0]}-slideshow.mp4`,
     ];
-    const { code, stderr } = await runCommand(ffmpeg_args);
-    if (code !== 0) {
-        console.error("(ffmpeg final slideshow generation) output -->");
-        console.error(stderr);
+
+    try {
+        await runCommand(ffmpeg_args);
+    } catch (error) {
         throw new Error("ffmpeg exited with non 0 code. (ffmpeg final slideshow generation)");
     }
 
     return `${image_paths[0]}-slideshow.mp4`;
-}
-
-async function runCommand(cmd: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
-    if (cmd.length === 0) {
-        throw new Error("runCommand requires at least one argument");
-    }
-    const binary = cmd[0];
-    if (!binary) {
-        throw new Error("runCommand requires a binary name");
-    }
-    const args = cmd.slice(1);
-    const process = Bun.spawn({ cmd: [binary, ...args], stdout: "pipe", stderr: "pipe" });
-    const [code, stdout, stderr] = await Promise.all([
-        process.exited,
-        process.stdout ? new Response(process.stdout).text() : "",
-        process.stderr ? new Response(process.stderr).text() : "",
-    ]);
-    return { code, stdout, stderr };
 }

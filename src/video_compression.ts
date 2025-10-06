@@ -1,4 +1,5 @@
-import { toMbString } from "./util";
+import { readFile } from "node:fs/promises";
+import { runCommand, toMbString } from "./util.ts";
 
 export async function compressVideo(filename_original: string): Promise<string> {
     // Locking mechanism to allow only one compression job at a time.
@@ -31,16 +32,11 @@ export async function compressVideo(filename_original: string): Promise<string> 
         ffmpeg_args.push("libx264");
         ffmpeg_args.push(filename_compressed);
 
-        const { code, stderr } = await runCommand(["ffmpeg", ...ffmpeg_args]);
-        if (code !== 0) {
-            console.error("ffmpeg compression stderr -->");
-            console.error(stderr);
-            throw new Error(`ffmpeg failed when compressing video. Non 0 exit code. filename: ${filename_original} Args: ${ffmpeg_args.join(" ")}`);
-        }
+        await runCommand(["ffmpeg", ...ffmpeg_args]);
 
         const compressed_info = await ffprobe(filename_compressed);
-        const compressed_video_file = Bun.file(filename_compressed);
-        const uncompressed_video_file = Bun.file(filename_original);
+        const compressed_video_file = await readFile(filename_compressed);
+        const uncompressed_video_file = await readFile(filename_original);
 
         // Telemetry to help pick better compression settings for each codec in future
         const cbr_bitrate_error_percentage = compressed_info.video_bitrate / (required_video_bitrate * 0.01) - 100;
@@ -48,12 +44,12 @@ export async function compressVideo(filename_original: string): Promise<string> 
 
         console.info(`ffmpeg info: ${ffmpeg_args}`);
         console.info(`video duration: ${video_duration.toFixed(2)}s`);
-        console.info(`original file size: ${toMbString(uncompressed_video_file.size)}`);
+        console.info(`original file size: ${toMbString(uncompressed_video_file.byteLength)}`);
         console.info(`original video stream: bitrate=${original_info.video_bitrate} `);
         console.info(`size=${toMbString(video_duration * original_info.video_bitrate * 8)}`);
         console.info(`original audio stream: bitrate=${original_info.audio_bitrate} `);
         console.info(`size=${toMbString(video_duration * original_info.audio_bitrate * 8)}`);
-        console.info(`resulted file size: ${toMbString(compressed_video_file.size)}`);
+        console.info(`resulted file size: ${toMbString(compressed_video_file.byteLength)}`);
         console.info(`resulted video stream: bitrate=${compressed_info.video_bitrate} `);
         console.info(`size=${toMbString(video_duration * compressed_info.video_bitrate * 8)}`);
         console.info(`resulted audio stream: bitrate=${compressed_info.audio_bitrate} `);
@@ -66,12 +62,7 @@ export async function compressVideo(filename_original: string): Promise<string> 
 }
 
 async function ffprobe(filename: string): Promise<{ duration_in_seconds: number; video_bitrate: number; audio_bitrate: number }> {
-    const { code, stdout, stderr } = await runCommand(["ffprobe", "-v", "quiet", "-print_format", "json", "-show_streams", `${filename}`]);
-    if (code !== 0) {
-        console.error("ffprobe stderr -->");
-        console.error(stderr);
-        throw new Error("ffprobe exited with non 0 code");
-    }
+    const { stdout } = await runCommand(["ffprobe", "-v", "quiet", "-print_format", "json", "-show_streams", `${filename}`]);
     const data = JSON.parse(stdout);
     const video_stream = data.streams.find((stream: { codec_type: string }) => stream.codec_type === "video");
     const video_bitrate = Number.parseInt(video_stream.bit_rate);
@@ -83,22 +74,4 @@ async function ffprobe(filename: string): Promise<{ duration_in_seconds: number;
         video_bitrate: video_bitrate,
         audio_bitrate: audio_bitrate,
     };
-}
-
-async function runCommand(cmd: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
-    if (cmd.length === 0) {
-        throw new Error("runCommand requires at least one argument");
-    }
-    const binary = cmd[0];
-    if (!binary) {
-        throw new Error("runCommand requires a binary name");
-    }
-    const args = cmd.slice(1);
-    const process = Bun.spawn({ cmd: [binary, ...args], stdout: "pipe", stderr: "pipe" });
-    const [code, stdout, stderr] = await Promise.all([
-        process.exited,
-        process.stdout ? new Response(process.stdout).text() : "",
-        process.stderr ? new Response(process.stderr).text() : "",
-    ]);
-    return { code, stdout, stderr };
 }

@@ -1,15 +1,11 @@
 {
   "compilerOptions": {
     // Environment setup & latest features
-    "lib": ["ESNext","DOM"],
-    "target": "ESNext",
-    "module": "Preserve",
+    "lib": ["ESNext", "dom"],
+    "target": "esnext",
+    "module": "nodenext",
     "moduleDetection": "force",
-    "jsx": "react-jsx",
-    "allowJs": true,
-
-    // Bundler mode
-    "moduleResolution": "bundler",
+    "moduleResolution": "nodenext",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
@@ -23,9 +19,9 @@
     "noImplicitOverride": true,
 
     // Some stricter flags (disabled by default)
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noPropertyAccessFromIndexSignature": false,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noPropertyAccessFromIndexSignature": true,
 
     // Other options
     "allowUnreachableCode": false,

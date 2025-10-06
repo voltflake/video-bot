@@ -1,4 +1,6 @@
-import type { Message } from "disgroove";
+import { promisify } from 'node:util';
+import child_process from 'node:child_process';
+const execFile = promisify(child_process.execFile);
 
 export type FileType = "image" | "video" | "audio";
 export type ContentType = "gallery" | "video";
@@ -17,38 +19,22 @@ export function toMbString(bytes: number): string {
     return `${(bytes / (1024 * 1024)).toFixed(2)}MiB`;
 }
 
-export async function getContentLength(url: string): Promise<number> {
-    try {
-        const response = await fetch(url, { method: "HEAD" });
-        if (response.ok) {
-            return extractLength(response.headers);
-        }
-    } catch {
-        console.error("Fault: Failed to extract content-length with HEAD method.");
+export async function runCommand(cmd: string[], cwd?: string): Promise<{ stdout: string; stderr: string }> {
+    if (cmd.length === 0) {
+        throw new Error("runCommand requires at least one argument");
+    }
+    const binary = cmd[0];
+    if (!binary) {
+        throw new Error("runCommand requires a binary name");
+    }
+    const args = cmd.slice(1);
+
+    let proc;
+    if (cwd) {
+        proc = await execFile(binary, args, { cwd: "downloads" });
+    } else {
+        proc = await execFile(binary, args);
     }
 
-    try {
-        const response = await fetch(url, { method: "GET" });
-        if (response.ok) {
-            return extractLength(response.headers);
-        }
-    } catch {
-        console.error("Fault: Failed to extract content-length with GET method.");
-    }
-
-    throw new Error("Failed to get content-length headers. URL might be broken/unavailable.");
-}
-
-function extractLength(headers: Headers): number {
-    let header_value = headers.get("content-length");
-    if (header_value) {
-        return Number.parseInt(header_value);
-    }
-
-    header_value = headers.get("Content-Length");
-    if (header_value) {
-        return Number.parseInt(header_value);
-    }
-
-    throw new Error("No content-length headers were found.");
+    return { stdout: proc.stdout, stderr: proc.stderr };
 }

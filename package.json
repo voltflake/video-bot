@@ -1,13 +1,10 @@
 {
   "name": "video-bot",
   "module": "src/index.ts",
-  "type": "module",
-  "private": true,
   "devDependencies": {
-    "@types/bun": "latest",
-    "disgroove": "npm:disgroove@^2.2.7"
+    "@types/node": "^24.6.2",
+    "disgroove": "3.0.0-dev.51640ff"
   },
-  "peerDependencies": {
-    "typescript": "^5"
-  }
+  "private": true,
+  "type": "module"
 }

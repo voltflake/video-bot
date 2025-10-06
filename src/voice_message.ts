@@ -1,28 +1,19 @@
 import type { Message } from "disgroove";
 import { parse, join } from "node:path";
 import { readFile, rm } from "node:fs/promises";
+import { runCommand } from "./util.ts";
 
 export async function convertToProperCodec(path_to_audio_file: string): Promise<string> {
     const path_info = parse(path_to_audio_file);
     const output_filename = join(path_info.dir, `${path_info.name}.ogg`);
-    const { code, stderr } = await runCommand(["ffmpeg", "-i", path_to_audio_file, "-c:a", "libopus", "-vn", output_filename]);
-    if (code !== 0) {
-        console.error("convertToProperCodec(): ffmpeg stderr -->");
-        console.error(stderr);
-        throw new Error("ffmpeg exited with non 0 code when creating OPUS audio file");
-    }
+    await runCommand(["ffmpeg", "-y", "-i", path_to_audio_file, "-c:a", "libopus", "-vn", output_filename]);
     return output_filename;
 }
 
 export async function getAudioData(path_to_audio_file: string): Promise<{ duration: number; waveform: Uint8Array }> {
     const path_info = parse(path_to_audio_file);
     const output_filename = join(path_info.dir, `${path_info.name}.raw`);
-    const { code, stderr } = await runCommand(["ffmpeg", "-i", path_to_audio_file, "-f", "u8", "-ac", "1", "-ar", "1000", output_filename]);
-    if (code !== 0) {
-        console.error("getAudioData(): ffmpeg stderr -->");
-        console.error(stderr);
-        throw new Error("ffmpeg exited with non 0 code when creating raw audio file");
-    }
+    await runCommand(["ffmpeg", "-y", "-i", path_to_audio_file, "-f", "u8", "-ac", "1", "-ar", "1000", output_filename]);
 
     const rawBuffer = await readFile(output_filename);
     const data = Array.from(rawBuffer);
@@ -100,24 +91,6 @@ export async function sendVoiceMessage(channel_id: string | bigint, path_to_audi
     
     const message: Message = await response.json();
     return message;
-}
-
-async function runCommand(cmd: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
-    if (cmd.length === 0) {
-        throw new Error("runCommand requires at least one argument");
-    }
-    const binary = cmd[0];
-    if (!binary) {
-        throw new Error("runCommand requires a binary name");
-    }
-    const args = cmd.slice(1);
-    const process = Bun.spawn({ cmd: [binary, ...args], stdout: "pipe", stderr: "pipe" });
-    const [code, stdout, stderr] = await Promise.all([
-        process.exited,
-        process.stdout ? new Response(process.stdout).text() : "",
-        process.stderr ? new Response(process.stderr).text() : "",
-    ]);
-    return { code, stdout, stderr };
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {

@@ -1,44 +1,52 @@
-import type { Content, Item } from "./util.ts";
+import { type Content, type Item, runCommand } from "./util.ts";
 import { mkdir } from "node:fs/promises";
 
 export async function extractWithGallerydl(url: URL): Promise<Content | undefined> {
     try {
         await mkdir("downloads", { recursive: true });
-        let target_href = url.href;
-        if (url.pathname.startsWith("/share/")) {
-            if (!(url.pathname.startsWith("/share/p/") || url.pathname.startsWith("/share/reel/"))) {
-                target_href = url.href.replace("/share/", "/share/p/");
-            }
-        }
-        const process = Bun.spawn(
-            ["gallery-dl", "--cookies", "../cookies.txt", "-d", ".", "-o", 'filename="{filename}.{extension}"', "--filesize-max", "50M", target_href],
-            { cwd: "downloads" }
-        );
-        if (await process.exited !== 0) return undefined;
-        const output = await new Response(process.stdout).text();
-        const filepaths = output.split("\n").map(line => line.trim()).filter(line => line);
-        if (!filepaths.length) return undefined;
-        const result_items: Item[] = [];
-        for (const filepath_raw of filepaths) {
-            // remove "./" prefix
-            const filepath = filepath_raw.startsWith("# ./") ? filepath_raw.slice(2) : filepath_raw;
-            if (filepath.endsWith(".jpg") || filepath.endsWith(".png") || filepath.endsWith(".jpeg")) {
-                result_items.push({ filepath: `downloads/${filepath}`, type: "image" });
-                continue;
-            }
-            if (filepath.endsWith(".mp4")) {
-                result_items.push({ filepath: `downloads/${filepath}`, type: "video" });
-                continue;
-            }
-            if (filepath.endsWith(".mp3") || filepath.endsWith(".m4a")) {
-                result_items.push({ filepath: `downloads/${filepath}`, type: "audio" });
-            }
-        }
-        if (result_items.find(item => item.type === "video")) {
-            return { type: "video", items: result_items };
-        }
-        return { type: "gallery", items: result_items };
     } catch {
+        console.error("Failed to create \"downloads\" directory");
         return undefined;
+    }
+
+    let target_href = url.href;
+    if (url.pathname.startsWith("/share/")) {
+        if (!(url.pathname.startsWith("/share/p/") || url.pathname.startsWith("/share/reel/"))) {
+            target_href = url.href.replace("/share/", "/share/p/");
+        }
+    }
+
+    let stdout;
+    try {
+        stdout = (await runCommand(["gallery-dl", "--cookies", "../cookies.txt", "-d", ".", "-o", 'filename="{filename}.{extension}"', "--filesize-max", "50M", target_href], "downloads")).stdout;
+    } catch (error) {
+        console.error("Failed to execute gallery-dl or it exited with an error", error);
+        return undefined;
+    }
+
+    const filepaths = stdout.split("\n").map(line => line.trim()).filter(line => line);
+    if (!filepaths.length) return undefined;
+
+    const result_items: Item[] = [];
+    for (const filepath_raw of filepaths) {
+        // remove "./" prefix
+        const filepath = filepath_raw.startsWith("# ./") ? filepath_raw.slice(2) : filepath_raw;
+        if (filepath.endsWith(".jpg") || filepath.endsWith(".png") || filepath.endsWith(".jpeg")) {
+            result_items.push({ filepath: `downloads/${filepath}`, type: "image" });
+            continue;
+        }
+        if (filepath.endsWith(".mp4")) {
+            result_items.push({ filepath: `downloads/${filepath}`, type: "video" });
+            continue;
+        }
+        if (filepath.endsWith(".mp3") || filepath.endsWith(".m4a")) {
+            result_items.push({ filepath: `downloads/${filepath}`, type: "audio" });
+        }
+    }
+
+    if (result_items.find(item => item.type === "video")) {
+        return { type: "video", items: result_items };
+    } else {
+        return { type: "gallery", items: result_items };
     }
 }
