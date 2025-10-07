@@ -100,7 +100,7 @@ export async function sendSingleVideo(content: Content, client: Client, message:
 
 // reencode to h264
 async function reencodeToH264(input_file: string): Promise<string> {
-    await runCommand(["ffmpeg", "-i", input_file, "-c:v", "libx264", "-preset", "fast", "-c:a", "aac", "-b:a", "96k", `${input_file}_reencoded.mp4`]);
+    await runCommand(["ffmpeg", "-y", "-i", input_file, "-c:v", "libx264", "-preset", "fast", "-c:a", "aac", "-b:a", "96k", `${input_file}_reencoded.mp4`]);
     return `${input_file}_reencoded.mp4`;
 }
 
