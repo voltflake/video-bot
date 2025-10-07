@@ -4,7 +4,7 @@ import { compressVideo } from "./video_compression.ts";
 import { readFile, stat } from "node:fs/promises";
 
 export async function sendSingleVideo(content: Content, client: Client, message: Message): Promise<void> {
-    if(!content.items[0]) return;
+    if (!content.items[0]) return;
     const video_path = content.items[0].filepath;
     let video_file = await stat(video_path);
     const video_size = video_file.size;
@@ -12,7 +12,7 @@ export async function sendSingleVideo(content: Content, client: Client, message:
     // Video is too large
     if (video_size >= 30 * 1024 * 1024) {
         await client.editMessage(message.channelId, message.id, {
-            content: `❌ Video is too large to be sent to Discord (~${video_size/1_000_000}MB).`,
+            content: `❌ Video is too large to be sent to Discord. (${video_size / 1_000_000}MB)`,
             allowedMentions: { repliedUser: false },
         });
         return;
@@ -20,49 +20,68 @@ export async function sendSingleVideo(content: Content, client: Client, message:
 
     // Video is in compressable size range. Try to compress
     if (video_size > 10 * 1024 * 1024) {
-
         const status_update = client.editMessage(message.channelId, message.id, {
-            content: `Compressing video... (~${toMbString(video_size)}).`,
+            content: `Compressing video to fit Discord limits... (${toMbString(video_size)})`,
             allowedMentions: { repliedUser: false },
         });
 
-        const compressed_video = await compressVideo(video_path);
-        await status_update;
-        const compressed_video_file = await readFile(compressed_video);
+        try {
+            const compressed_video = await compressVideo(video_path);
+            await status_update;
+            const compressed_video_file = await readFile(compressed_video);
 
-        if (compressed_video_file.byteLength > 10 * 1024 * 1024) {
+            if (compressed_video_file.byteLength > 10 * 1024 * 1024) {
+                await client.editMessage(message.channelId, message.id, {
+                    content: `❌ Video is too large to be sent to Discord even after compression. (${toMbString(compressed_video_file.byteLength)})`,
+                    allowedMentions: { repliedUser: false },
+                });
+                return;
+            }
+
             await client.editMessage(message.channelId, message.id, {
-                content: `❌ Video is too large to be sent to Discord even after compression (~${toMbString(compressed_video_file.byteLength)}).`,
+                content: "",
+                files: [{ contents: new Blob([new Uint8Array(compressed_video_file)], { type: "video/mp4" }), name: "video.mp4" }],
+                allowedMentions: { repliedUser: false },
+            });
+
+            await client.editMessage(message.channelId, message.referencedMessage?.id || "", {
+                flags: MessageFlags.SuppressEmbeds,
+            });
+            return;
+        } catch {
+            await client.editMessage(message.channelId, message.id, {
+                content: "❌ Error occured during compression. Unable to send video.",
                 allowedMentions: { repliedUser: false },
             });
             return;
         }
-
-        await client.editMessage(message.channelId, message.id, {
-            content: "",
-            files: [{ contents: new Blob([new Uint8Array(compressed_video_file)], { type: "video/mp4" }), name: "video.mp4" }],
-            allowedMentions: { repliedUser: false },
-        });
-
-        await client.editMessage(message.channelId, message.referencedMessage?.id || "", {
-            flags: MessageFlags.SuppressEmbeds,
-        });
-        return;
     }
 
     // No need for compression - just send the video
     // Check if codec is okay for Discord
-    let video;
+    let video: Buffer;
     try {
         const codec = await getVideoCodec(video_path);
         if (codec !== "h264") {
             // Re-encode to h264
-            const reencoded_video = await reencodeToH264(video_path);
-            video = await readFile(reencoded_video);
+            try {
+                const reencoded_video = await reencodeToH264(video_path);
+                video = await readFile(reencoded_video);
+            } catch (error) {
+                await client.editMessage(message.channelId, message.id, {
+                    content: "❌ Error occured when reencoding video to proper format.",
+                    allowedMentions: { repliedUser: false },
+                });
+                return;
+            }
         } else {
             video = await readFile(video_path);
         }
     } catch (error) {
+        await client.editMessage(message.channelId, message.id, {
+            content: "❌ Error occured when validating video format before sending it to Discord.",
+            allowedMentions: { repliedUser: false },
+        });
         return;
     }
 
@@ -72,10 +91,11 @@ export async function sendSingleVideo(content: Content, client: Client, message:
         allowedMentions: { repliedUser: false },
     });
 
-    await client.editMessage(message.channelId, message.referencedMessage?.id || "", {
-        flags: MessageFlags.SuppressEmbeds,
-    });
-    return;
+    try {
+        await client.editMessage(message.channelId, message.referencedMessage?.id || "", {
+            flags: MessageFlags.SuppressEmbeds,
+        });
+    } catch {}
 }
 
 // reencode to h264

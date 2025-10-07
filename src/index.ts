@@ -30,13 +30,17 @@ client.on("ready", () => {
 });
 
 // Where all messages are handled
-client.on("messageCreate", async (message: Message): Promise<undefined> => {
+client.on("messageCreate", async (message: Message) => {
     if (message.author.id === client.user?.id) return;
     if (!message.content) return;
 
     // Check for supported links
-    const url = extractURL(message.content);
-    if (!url) return;
+    let url: URL;
+    try {
+        url = extractURL(message.content);
+    } catch {
+        return;
+    }
 
     // Start yt-dlp task
     let extracted_content_promise = extractWithYtdlp(url);
@@ -49,15 +53,16 @@ client.on("messageCreate", async (message: Message): Promise<undefined> => {
     });
 
     // Finish yt-dlp task
-    let extracted_content = await extracted_content_promise;
-    if (extracted_content) {
+    let extracted_content;
+    try {
+        extracted_content = await extracted_content_promise;
         if (extracted_content.type === "video") {
             await sendSingleVideo(extracted_content, client, response_message);
         } else {
             await sendGallery(extracted_content, client, response_message);
         }
         return;
-    }
+    } catch {}
 
     // Start gallery-dl task if yt-dlp failed
     extracted_content_promise = extractWithGallerydl(url);
@@ -69,42 +74,37 @@ client.on("messageCreate", async (message: Message): Promise<undefined> => {
     });
 
     // Finish gallery-dl task
-    extracted_content = await extracted_content_promise;
-    if (extracted_content) {
+    try {
+        extracted_content = await extracted_content_promise;
         if (extracted_content.type === "video") {
             await sendSingleVideo(extracted_content, client, response_message);
         } else {
             await sendGallery(extracted_content, client, response_message);
         }
         return;
-    }
+    } catch {}
 
     // All methods failed
     await client.editMessage(response_message.channelId, response_message.id, {
         content: `Sorry, I couldn't extract content from this link...`,
         allowedMentions: {repliedUser: false}
     });
-    return;
 });
 
-function extractURL(text: string): URL | undefined {
+function extractURL(text: string): URL {
     // Improved regex to match more URL formats (optional schemes, handles common cases)
     const urlRegex = /https?:\/\/[^\s]+/gi;
     const matches = text.match(urlRegex);
-    if (!matches) return undefined;
+    if (!matches) throw new Error("No links were found in message");
     for (const match of matches) {
-        try {
             const url = new URL(match);
             if (url.hostname.endsWith("tiktok.com")) return url;
             if (url.hostname.endsWith("instagram.com")) return url;
             if (url.hostname.endsWith("youtube.com") || url.hostname.endsWith("youtu.be")) {
                 if (url.pathname.includes("/shorts/")) return url;
             }
-        } catch (error) {
-            console.warn(`Invalid URL skipped: ${match}`, error);
-        }
     }
-    return undefined;
+    throw new Error("No supported URLs found");
 } 
 
 // Actually start bot
