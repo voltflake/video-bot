@@ -65,6 +65,10 @@ export async function sendSingleVideo(content: Content, client: Client, message:
         if (codec !== "h264") {
             // Re-encode to h264
             try {
+                await client.editMessage(message.channelId, message.id, {
+                    content: "Re-encoding video so it will be playable on all discord clients...",
+                    allowedMentions: { repliedUser: false },
+                });
                 const reencoded_video = await reencodeToH264(video_path);
                 video = await readFile(reencoded_video);
             } catch (error) {

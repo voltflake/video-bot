@@ -47,7 +47,7 @@ client.on("messageCreate", async (message: Message) => {
 
     // Start reporting status
     const response_message = await client.createMessage(message.channelId, {
-        content: `Extracting content from ${url.hostname}, please wait...`,
+        content: `Downloading content from ${url.hostname}, please wait...`,
         messageReference: {messageId: message.id},
         allowedMentions: {repliedUser: false}
     });
@@ -69,7 +69,7 @@ client.on("messageCreate", async (message: Message) => {
 
     // Update status
     await client.editMessage(response_message.channelId, response_message.id, {
-        content: `Trying more sophisticated methods...`,
+        content: `Trying other downloading methods...`,
         allowedMentions: {repliedUser: false}
     });
 
