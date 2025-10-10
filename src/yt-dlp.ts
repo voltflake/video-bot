@@ -1,11 +1,17 @@
-import { type Content, runCommand } from "./util.ts";
+import { type Content, type Item, runCommand } from "./util.ts";
 import { mkdir } from "node:fs/promises";
 
 export async function extractWithYtdlp(url: URL): Promise<Content> {
     await mkdir("downloads", { recursive: true });
     const { stdout } = await runCommand(["yt-dlp", "--quiet", "--no-warnings", "--print", "after_move:%(filepath)s", "--max-filesize", "100M", "--cookies", "../cookies.txt", url.href], "downloads");
-    const filepath = stdout.split("\n")[0]?.trim();
-    if (!filepath) throw new Error("Invalid output from yt-dlp");;
-    if (filepath === "NA") throw new Error("Invalid output from yt-dlp");;
-    return { type: "video", items: [{ filepath: filepath, type: "video" }] };
+    const filepaths = stdout.split("\n");
+    const result: Item[] = [];
+    for (const filepath of filepaths) {
+        if (filepath.endsWith("NA")) continue;
+        if (filepath.endsWith(".mp4")) result.push({ filepath, type: "video" });
+        else if (filepath.endsWith(".jpg") || filepath.endsWith(".png") || filepath.endsWith(".webp")) result.push({ filepath, type: "image" });
+    }
+    if (result.length === 0) throw new Error("No downloadable content found");
+    if (result.length === 1) return { type: "video", items: result };
+    return { type: "gallery", items: result };
 }

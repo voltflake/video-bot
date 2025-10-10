@@ -43,7 +43,12 @@ client.on("messageCreate", async (message: Message) => {
     }
 
     // Start yt-dlp task
-    let extracted_content_promise = extractWithYtdlp(url);
+    let extracted_content_promise;
+    if (url.pathname.includes("/stories/")) {
+        extracted_content_promise = extractWithGallerydl(url);
+    } else {
+        extracted_content_promise = extractWithYtdlp(url);
+    }
 
     // Start reporting status
     const response_message = await client.createMessage(message.channelId, {
@@ -63,6 +68,14 @@ client.on("messageCreate", async (message: Message) => {
         }
         return;
     } catch {}
+
+    if (url.pathname.includes("/stories/")) {
+        // All methods failed
+        await client.editMessage(response_message.channelId, response_message.id, {
+            content: `Sorry, I couldn't extract content from this link...`,
+            allowedMentions: {repliedUser: false}
+        });
+    }
 
     // Start gallery-dl task if yt-dlp failed
     extracted_content_promise = extractWithGallerydl(url);
