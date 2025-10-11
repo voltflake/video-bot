@@ -7,8 +7,8 @@ export async function extractWithYtdlp(url: URL): Promise<Content> {
     const filepaths = stdout.split("\n");
     const result: Item[] = [];
     for (const filepath of filepaths) {
-        if (filepath.endsWith("NA")) continue;
-        if (filepath.endsWith(".mp4")) result.push({ filepath, type: "video" });
+        if (filepath.endsWith("NA") || filepath === "") continue;
+        if (filepath.endsWith(".mp4") || filepath.endsWith(".webm")) result.push({ filepath, type: "video" });
         else if (filepath.endsWith(".jpg") || filepath.endsWith(".png") || filepath.endsWith(".webp")) result.push({ filepath, type: "image" });
     }
     if (result.length === 0) throw new Error("No downloadable content found");

@@ -62,7 +62,7 @@ export async function sendSingleVideo(content: Content, client: Client, message:
     let video: Buffer;
     try {
         const codec = await getVideoCodec(video_path);
-        if (codec !== "h264") {
+        if (codec !== "h264" || !video_path.endsWith(".mp4")) {
             // Re-encode to h264
             try {
                 await client.editMessage(message.channelId, message.id, {
