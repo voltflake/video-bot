@@ -13,11 +13,17 @@ export async function sendGallery(content: Content, client: Client, message: Mes
         if (items_processed === 10) {
             break;
         }
-        if (item.type !== "image") {
+        const file_data = await readFile(item.filepath);
+        if (item.type === "video") {
+            filecontent_arr.push({ contents: new Uint8Array(file_data), name: `SPOILER_video${i + 1}.mp4` });
+            items_processed += 1;
             continue;
         }
-        const image_data = await readFile(item.filepath);
-        filecontent_arr.push({ contents: new Uint8Array(image_data), name: `SPOILER_image${i + 1}.png` });
+        if (item.type === "image") {
+            filecontent_arr.push({ contents: new Uint8Array(file_data), name: `SPOILER_image${i + 1}.png` });
+            items_processed += 1;
+            continue;
+        }
     }
 
     await client.editMessage(message.channelId, message.id, {

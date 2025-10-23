@@ -3,6 +3,7 @@ import { sendSingleVideo } from "./send_video.ts";
 import { sendGallery } from "./send_gallery.ts";
 import { extractWithYtdlp } from "./yt-dlp.ts"
 import { extractWithGallerydl } from "./gallery-dl.ts"
+import { extractWithSavegram } from "./safegram.ts";
 
 console.info("Feedback and bug reports: https://github.com/voltflake/video-bot/issues/new");
 
@@ -44,8 +45,8 @@ client.on("messageCreate", async (message: Message) => {
 
     // Start yt-dlp task
     let extracted_content_promise;
-    if (url.pathname.includes("/stories/")) {
-        extracted_content_promise = extractWithGallerydl(url);
+    if (url.hostname.endsWith("instagram.com")) {
+        extracted_content_promise = extractWithSavegram(url);
     } else {
         extracted_content_promise = extractWithYtdlp(url);
     }
@@ -69,12 +70,13 @@ client.on("messageCreate", async (message: Message) => {
         return;
     } catch {}
 
-    if (url.pathname.includes("/stories/")) {
+    if (url.hostname.endsWith("instagram.com")) {
         // All methods failed
         await client.editMessage(response_message.channelId, response_message.id, {
             content: `Sorry, I couldn't extract content from this link...`,
             allowedMentions: {repliedUser: false}
         });
+        return;
     }
 
     // Start gallery-dl task if yt-dlp failed

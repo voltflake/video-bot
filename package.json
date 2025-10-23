@@ -2,7 +2,7 @@
   "name": "video-bot",
   "module": "src/index.ts",
   "devDependencies": {
-    "@types/node": "^24.6.2",
+    "@types/node": "^24.9.1",
     "disgroove": "3.0.0-dev.51640ff"
   },
   "private": true,
