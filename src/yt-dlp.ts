@@ -1,4 +1,4 @@
-import { type Content, type Item, runCommand } from "./util.ts";
+import { type Content, type Item, runCommand } from "./util.js";
 import { mkdir } from "node:fs/promises";
 
 export async function extractWithYtdlp(url: URL): Promise<Content> {

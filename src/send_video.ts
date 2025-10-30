@@ -1,6 +1,6 @@
 import { type Client, MessageFlags, type Message } from "disgroove";
-import { runCommand, toMbString, type Content } from "./util.ts";
-import { compressVideo } from "./video_compression.ts";
+import { runCommand, toMbString, type Content } from "./util.js";
+import { compressVideo } from "./video_compression.js";
 import { readFile, stat } from "node:fs/promises";
 
 export async function sendSingleVideo(content: Content, client: Client, message: Message): Promise<void> {

@@ -1,7 +1,7 @@
 import { type Client, type Message, MessageFlags, type FileData } from "disgroove";
-import type { Content } from "./util.ts";
-import { convertToProperCodec, getAudioData, sendVoiceMessage } from "./voice_message.ts";
-import { createSlideshowVideo } from "./generate_video.ts";
+import type { Content } from "./util.js";
+import { convertToProperCodec, getAudioData, sendVoiceMessage } from "./voice_message.js";
+import { createSlideshowVideo } from "./generate_video.js";
 import { readFile } from "node:fs/promises";
 
 // TODO: refactor to threat posts with videos differently from slideshows

@@ -1,9 +1,9 @@
 import { Client, GatewayIntents, type Message } from "disgroove";
-import { sendSingleVideo } from "./send_video.ts";
-import { sendGallery } from "./send_gallery.ts";
-import { extractWithYtdlp } from "./yt-dlp.ts"
-import { extractWithGallerydl } from "./gallery-dl.ts"
-import { extractWithSavegram } from "./safegram.ts";
+import { sendSingleVideo } from "./send_video.js";
+import { sendGallery } from "./send_gallery.js";
+import { extractWithYtdlp } from "./yt-dlp.js"
+import { extractWithGallerydl } from "./gallery-dl.js"
+import { extractWithSavegram } from "./safegram.js";
 
 console.info("Feedback and bug reports: https://github.com/voltflake/video-bot/issues/new");
 

@@ -6,9 +6,9 @@
     "module": "nodenext",
     "moduleDetection": "force",
     "moduleResolution": "nodenext",
-    "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
-    "noEmit": true,
+    "outDir": "./dist",
+    "sourceMap": true,
 
     // Best practices
     "strict": true,

@@ -4,3 +4,5 @@ downloads
 node_modules
 cookies.txt
 start.sh
+start.bat
+dist

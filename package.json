@@ -1,10 +1,11 @@
 {
   "name": "video-bot",
-  "module": "src/index.ts",
-  "devDependencies": {
+  "module": "src/index.js",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "typescript": "^5.9.3",
     "@types/node": "^24.9.1",
     "disgroove": "3.0.0-dev.51640ff"
-  },
-  "private": true,
-  "type": "module"
+  }
 }

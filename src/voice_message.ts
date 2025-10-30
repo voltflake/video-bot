@@ -1,7 +1,7 @@
 import type { Message } from "disgroove";
 import { parse, join } from "node:path";
 import { readFile, rm } from "node:fs/promises";
-import { runCommand } from "./util.ts";
+import { runCommand } from "./util.js";
 
 export async function convertToProperCodec(path_to_audio_file: string): Promise<string> {
     const path_info = parse(path_to_audio_file);

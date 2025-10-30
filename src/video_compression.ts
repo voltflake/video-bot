@@ -1,5 +1,5 @@
 import { readFile, stat } from "node:fs/promises";
-import { runCommand, toMbString } from "./util.ts";
+import { runCommand, toMbString } from "./util.js";
 
 export async function compressVideo(filename_original: string): Promise<string> {
     // Locking mechanism to allow only one compression job at a time.
