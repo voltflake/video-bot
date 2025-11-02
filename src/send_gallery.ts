@@ -3,6 +3,7 @@ import type { Content } from "./util.js";
 import { convertToProperCodec, getAudioData, sendVoiceMessage } from "./voice_message.js";
 import { createSlideshowVideo } from "./generate_video.js";
 import { readFile } from "node:fs/promises";
+import { compressVideo } from "./video_compression.js";
 
 // TODO: refactor to threat posts with videos differently from slideshows
 export async function sendGallery(content: Content, client: Client, message: Message): Promise<void> {
@@ -13,8 +14,20 @@ export async function sendGallery(content: Content, client: Client, message: Mes
         if (items_processed === 10) {
             break;
         }
-        const file_data = await readFile(item.filepath);
+        let file_data = await readFile(item.filepath);
         if (item.type === "video") {
+            if (file_data.byteLength > 10 * 1024 * 1024) {
+                try {
+                    const compressed_path = await compressVideo(item.filepath);
+                    file_data = await readFile(compressed_path);
+                } catch {
+                    await client.editMessage(message.channelId, message.id, {
+                        content: `❌ Failed to compress video (~${file_data.byteLength/1_000_000}MB)`,
+                        allowedMentions: { repliedUser: false },
+                    });
+                    return;
+                }
+            }
             filecontent_arr.push({ contents: new Uint8Array(file_data), name: `SPOILER_video${i + 1}.mp4` });
             items_processed += 1;
             continue;
@@ -59,6 +72,7 @@ export async function sendGallery(content: Content, client: Client, message: Mes
             content: `❌ Generated video is too large to be sent to Discord (~${created_video.byteLength/1_000_000}MB)`,
             allowedMentions: { repliedUser: false },
         });
+        return;
     }
 
     await client.editMessage(message.channelId, message.id, {
