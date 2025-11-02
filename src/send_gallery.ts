@@ -18,6 +18,10 @@ export async function sendGallery(content: Content, client: Client, message: Mes
         if (item.type === "video") {
             if (file_data.byteLength > 10 * 1024 * 1024) {
                 try {
+                    await client.editMessage(message.channelId, message.id, {
+                        content: `Compressing video item... (~${file_data.byteLength/1_000_000}MB)`,
+                        allowedMentions: { repliedUser: false },
+                    });
                     const compressed_path = await compressVideo(item.filepath);
                     file_data = await readFile(compressed_path);
                 } catch {
