@@ -1,6 +1,6 @@
 import { Client, GatewayIntents, type Message } from "disgroove";
 import { Job } from "./job.js";
-import type { Content } from "./util.js";
+import type { Item } from "./util.js";
 
 console.info("Feedback and bug reports: https://github.com/voltflake/video-bot/issues/new");
 
@@ -10,11 +10,9 @@ if (!bot_token) {
     process.exit(1);
 }
 
-const client = new Client(bot_token, {gateway: { intents:
-    GatewayIntents.Guilds |
-    GatewayIntents.MessageContent |
-    GatewayIntents.GuildMessages
-}});
+const client = new Client(bot_token, {
+    gateway: { intents: GatewayIntents.Guilds | GatewayIntents.MessageContent | GatewayIntents.GuildMessages }
+});
 
 // Graceful shutdown
 process.on("SIGINT", () => {
@@ -46,16 +44,16 @@ client.on("messageCreate", async (message: Message) => {
     if (!job.response_message) return;
 
     // Start extraction
-    let extracted_content: Content | undefined;
+    let extracted_content: Item[] | undefined;
     for (const [i, extractor] of job.extractors.entries()) {
         try {
             extracted_content = await extractor(url);
             break;
         } catch {
-            if (i < job.extractors.length) {
-                await job.set_status(`Trying method (${i + 1}/${job.extractors.length}) to download content from ${url.hostname}, please wait...`);
+            if (i + 1 < job.extractors.length) {
+                await job.set_status(`Trying method (${i + 2}/${job.extractors.length}) to download content from ${url.hostname}, please wait...`);
             } else {
-                await job.set_status(`All downloading methods failed for ${url.hostname}.`);
+                await job.set_status(`All downloading methods failed for ${url.hostname}`);
                 return;
             }
         }
@@ -76,12 +74,12 @@ function extractURL(text: string): URL {
     const matches = text.match(urlRegex);
     if (!matches) throw new Error("No links were found in message");
     for (const match of matches) {
-            const url = new URL(match);
-            if (url.hostname.endsWith("tiktok.com")) return url;
-            if (url.hostname.endsWith("instagram.com")) return url;
-            if (url.hostname.endsWith("youtube.com") || url.hostname.endsWith("youtu.be")) {
-                if (url.pathname.includes("/shorts/")) return url;
-            }
+        const url = new URL(match);
+        if (url.hostname.endsWith("tiktok.com")) return url;
+        if (url.hostname.endsWith("instagram.com")) return url;
+        if (url.hostname.endsWith("youtube.com") || url.hostname.endsWith("youtu.be")) {
+            if (url.pathname.includes("/shorts/")) return url;
+        }
     }
     throw new Error("No supported URLs found");
 }

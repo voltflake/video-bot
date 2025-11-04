@@ -1,7 +1,7 @@
-import type { Content, Item } from "../util.js";
+import type { Item } from "../util.js";
 import { mkdir, writeFile } from "node:fs/promises";
 
-export async function extractWithSavegram(url: URL): Promise<Content> {
+export async function extractWithSavegram(url: URL): Promise<Item[]> {
     await mkdir("downloads", { recursive: true });
 
     const response = await (await fetch("https://savegram.app/en/instagram-video-downloader")).text();
@@ -18,18 +18,9 @@ export async function extractWithSavegram(url: URL): Promise<Content> {
 
     //make a POST request to https://savegram.app/en/instagram-video-downloader with form data k_exp, k_token, t, lang, v, q in formdata format
     const postResponse = await fetch("https://savegram.app/api/ajaxSearch", {
-    method: "POST",
-        headers: {
-        "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: new URLSearchParams({
-        k_exp,
-        k_token,
-        q,
-        t,
-        lang,
-        v,
-    })
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ k_exp, k_token, q, t, lang, v })
     });
 
     const data = await postResponse.text();
@@ -65,9 +56,5 @@ export async function extractWithSavegram(url: URL): Promise<Content> {
         }
     }
 
-    if (result_items.length === 1 && result_items.find(item => item.type === "video")) {
-        return { type: "video", items: result_items };
-    } else {
-        return { type: "gallery", items: result_items };
-    }
+    return result_items;
 }

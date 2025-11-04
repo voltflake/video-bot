@@ -3,12 +3,6 @@ import child_process from 'node:child_process';
 const execFile = promisify(child_process.execFile);
 
 export type FileType = "image" | "video" | "audio";
-export type ContentType = "gallery" | "video";
-
-export type Content = {
-    type: ContentType;
-    items: Item[];
-};
 
 export type Item = {
     filepath: string;

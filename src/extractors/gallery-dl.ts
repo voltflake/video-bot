@@ -1,7 +1,7 @@
-import { type Content, type Item, runCommand } from "../util.js";
+import { type Item, runCommand } from "../util.js";
 import { mkdir } from "node:fs/promises";
 
-export async function extractWithGallerydl(url: URL): Promise<Content> {
+export async function extractWithGallerydl(url: URL): Promise<Item[]> {
     await mkdir("downloads", { recursive: true });
 
     let target_href = url.href;
@@ -11,7 +11,7 @@ export async function extractWithGallerydl(url: URL): Promise<Content> {
         }
     }
 
-    let {stdout} = await runCommand(["gallery-dl", "--cookies", "../cookies.txt", "-d", ".", "-o", 'filename="{filename}.{extension}"', "--filesize-max", "50M", target_href], "downloads");
+    let { stdout } = await runCommand(["gallery-dl", "--cookies", "../cookies.txt", "-d", ".", "-o", 'filename="{filename}.{extension}"', "--filesize-max", "50M", target_href], "downloads");
 
     const filepaths = stdout.split("\n").map(line => line.trim()).filter(line => line);
     if (!filepaths.length) throw new Error("Invalid output from gallery-gl");
@@ -33,9 +33,5 @@ export async function extractWithGallerydl(url: URL): Promise<Content> {
         }
     }
 
-    if (result_items.find(item => item.type === "video")) {
-        return { type: "video", items: result_items };
-    } else {
-        return { type: "gallery", items: result_items };
-    }
+    return result_items;
 }

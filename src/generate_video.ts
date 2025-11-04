@@ -73,19 +73,14 @@ export async function createSlideshowVideo(items: Item[]): Promise<string> {
     for (const path of image_paths) {
         try {
             await runCommand([
-            "magick",
-            "convert",
-            path,
-            "-resize",
-            `${selected_width}x${max_height}`,
-            "-background",
-            "black",
-            "-gravity",
-            "center",
-            "-extent",
-            `${selected_width}x${max_height}`,
-            `${path}-scaled.png`,
-        ]);
+                "magick", "convert",
+                path,
+                "-resize", `${selected_width}x${max_height}`,
+                "-background", "black",
+                "-gravity", "center",
+                "-extent", `${selected_width}x${max_height}`,
+                `${path}-scaled.png`
+            ]);
         } catch (error) {
             throw new Error("magick convert exited with non 0 code");
         }
@@ -129,11 +124,7 @@ export async function createSlideshowVideo(items: Item[]): Promise<string> {
             const first_input = current_filter_result;
             const second_input = current_second_input + 1 < image_count ? current_second_input + 1 : 0;
             const output = current_filter_result + 1;
-            complex_filter = complex_filter.concat(
-                `[m${first_input}][${second_input}]xfade=transition=slideleft:duration=${transition_duration.toFixed(1)}:offset=${
-                    ((slide_duration + transition_duration) * i - transition_duration).toFixed(1)
-                }[m${output}];`,
-            );
+            complex_filter = complex_filter.concat(`[m${first_input}][${second_input}]xfade=transition=slideleft:duration=${transition_duration.toFixed(1)}:offset=${((slide_duration + transition_duration) * i - transition_duration).toFixed(1)}[m${output}];`);
             current_filter_result += 1;
             current_second_input = second_input;
         }

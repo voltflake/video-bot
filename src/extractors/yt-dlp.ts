@@ -1,9 +1,9 @@
-import { type Content, type Item, runCommand } from "../util.js";
+import { type Item, runCommand } from "../util.js";
 import { mkdir } from "node:fs/promises";
 
-export async function extractWithYtdlp(url: URL): Promise<Content> {
+export async function extractWithYtdlp(url: URL): Promise<Item[]> {
     await mkdir("downloads", { recursive: true });
-    const { stdout } = await runCommand(["yt-dlp", "--quiet", "--no-warnings", "--print", "after_move:%(filepath)s", "--max-filesize", "100M", "--cookies", "../cookies.txt", url.href], "downloads");
+    const { stdout } = await runCommand(["yt-dlp", "--quiet", "--no-warnings", "--print", "after_move:%(filepath)s", "--max-filesize", "100M", "--restrict-filenames", "--cookies", "../cookies.txt", url.href], "downloads");
     const filepaths = stdout.split("\n");
     const result: Item[] = [];
     for (const filepath of filepaths) {
@@ -12,6 +12,5 @@ export async function extractWithYtdlp(url: URL): Promise<Content> {
         else if (filepath.endsWith(".jpg") || filepath.endsWith(".png") || filepath.endsWith(".webp")) result.push({ filepath, type: "image" });
     }
     if (result.length === 0) throw new Error("No downloadable content found");
-    if (result.length === 1) return { type: "video", items: result };
-    return { type: "gallery", items: result };
+    return result;
 }

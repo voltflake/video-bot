@@ -67,7 +67,7 @@ async function ffprobe(filename: string): Promise<{ duration_in_seconds: number;
     const video_stream = data.streams.find((stream: { codec_type: string }) => stream.codec_type === "video");
     let video_bitrate = undefined;
     let duration_in_seconds = video_stream.duration ? Number.parseFloat(video_stream.duration) : undefined;
-    if(!duration_in_seconds) {
+    if (!duration_in_seconds) {
         const duration_tag = video_stream.tags["DURATION"];
         if (!duration_tag) {
             throw new Error("Error when parsing video bitrate from ffprobe output");

@@ -88,7 +88,7 @@ export async function sendVoiceMessage(channel_id: string | bigint, path_to_audi
     if (!response.ok) {
         throw new Error("Failed to send voice message to discord");
     }
-    
+
     const message: Message = await response.json();
     return message;
 }
