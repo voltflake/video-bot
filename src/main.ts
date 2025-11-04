@@ -1,9 +1,6 @@
 import { Client, GatewayIntents, type Message } from "disgroove";
-import { sendSingleVideo } from "./send_video.js";
-import { sendGallery } from "./send_gallery.js";
-import { extractWithYtdlp } from "./yt-dlp.js"
-import { extractWithGallerydl } from "./gallery-dl.js"
-import { extractWithSavegram } from "./safegram.js";
+import { Job } from "./job.js";
+import type { Content } from "./util.js";
 
 console.info("Feedback and bug reports: https://github.com/voltflake/video-bot/issues/new");
 
@@ -43,67 +40,34 @@ client.on("messageCreate", async (message: Message) => {
         return;
     }
 
-    // Start yt-dlp task
-    let extracted_content_promise;
-    if (url.hostname.endsWith("instagram.com")) {
-        extracted_content_promise = extractWithSavegram(url);
-    } else {
-        extracted_content_promise = extractWithYtdlp(url);
-    }
+    // Create job
+    const job = new Job(url, message);
+    await job.set_status(`Downloading content from ${url.hostname}, please wait...`);
+    if (!job.response_message) return;
 
-    // Start reporting status
-    const response_message = await client.createMessage(message.channelId, {
-        content: `Downloading content from ${url.hostname}, please wait...`,
-        messageReference: {messageId: message.id},
-        allowedMentions: {repliedUser: false}
-    });
-
-    // Finish yt-dlp task
-    let extracted_content;
-    try {
-        extracted_content = await extracted_content_promise;
-        if (extracted_content.type === "video") {
-            await sendSingleVideo(extracted_content, client, response_message);
-        } else {
-            await sendGallery(extracted_content, client, response_message);
+    // Start extraction
+    let extracted_content: Content | undefined;
+    for (const [i, extractor] of job.extractors.entries()) {
+        try {
+            extracted_content = await extractor(url);
+            break;
+        } catch {
+            if (i < job.extractors.length) {
+                await job.set_status(`Trying method (${i + 1}/${job.extractors.length}) to download content from ${url.hostname}, please wait...`);
+            } else {
+                await job.set_status(`All downloading methods failed for ${url.hostname}.`);
+                return;
+            }
         }
-        return;
-    } catch {}
-
-    if (url.hostname.endsWith("instagram.com")) {
-        // All methods failed
-        await client.editMessage(response_message.channelId, response_message.id, {
-            content: `Sorry, I couldn't extract content from this link...`,
-            allowedMentions: {repliedUser: false}
-        });
-        return;
     }
+    if (!extracted_content) return;
 
-    // Start gallery-dl task if yt-dlp failed
-    extracted_content_promise = extractWithGallerydl(url);
-
-    // Update status
-    await client.editMessage(response_message.channelId, response_message.id, {
-        content: `Trying other downloading methods...`,
-        allowedMentions: {repliedUser: false}
-    });
-
-    // Finish gallery-dl task
+    // Send Results
     try {
-        extracted_content = await extracted_content_promise;
-        if (extracted_content.type === "video") {
-            await sendSingleVideo(extracted_content, client, response_message);
-        } else {
-            await sendGallery(extracted_content, client, response_message);
-        }
-        return;
-    } catch {}
-
-    // All methods failed
-    await client.editMessage(response_message.channelId, response_message.id, {
-        content: `Sorry, I couldn't extract content from this link...`,
-        allowedMentions: {repliedUser: false}
-    });
+        await job.tryToSendContent(extracted_content);
+    } catch {
+        await job.set_status("Something went wrong while trying to send content.");
+    }
 });
 
 function extractURL(text: string): URL {
@@ -120,7 +84,8 @@ function extractURL(text: string): URL {
             }
     }
     throw new Error("No supported URLs found");
-} 
+}
 
 // Actually start bot
 client.connect();
+export { client };

@@ -1,4 +1,4 @@
-import type { Content, Item } from "./util.js";
+import type { Content, Item } from "../util.js";
 import { mkdir, writeFile } from "node:fs/promises";
 
 export async function extractWithSavegram(url: URL): Promise<Content> {

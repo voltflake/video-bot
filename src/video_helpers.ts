@@ -95,3 +95,15 @@ async function ffprobe(filename: string): Promise<{ duration_in_seconds: number;
         audio_bitrate: audio_bitrate,
     };
 }
+
+// reencode to h264
+export async function reencodeToH264(input_file: string): Promise<string> {
+    await runCommand(["ffmpeg", "-y", "-i", input_file, "-c:v", "libx264", "-preset", "fast", "-c:a", "aac", "-b:a", "96k", `${input_file}_reencoded.mp4`]);
+    return `${input_file}_reencoded.mp4`;
+}
+
+// ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 video.mkv
+export async function getVideoCodec(filename: string): Promise<string> {
+    const { stdout } = await runCommand(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name", "-of", "default=noprint_wrappers=1:nokey=1", `${filename}`]);
+    return stdout.trim();
+}

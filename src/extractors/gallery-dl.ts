@@ -1,4 +1,4 @@
-import { type Content, type Item, runCommand } from "./util.js";
+import { type Content, type Item, runCommand } from "../util.js";
 import { mkdir } from "node:fs/promises";
 
 export async function extractWithGallerydl(url: URL): Promise<Content> {
