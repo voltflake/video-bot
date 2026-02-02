@@ -3,7 +3,7 @@ import type { Item } from "./util.js";
 import { convertToProperCodec, getAudioData, sendVoiceMessage } from "./voice_message.js";
 import { createSlideshowVideo } from "./generate_video.js";
 import { readFile } from "node:fs/promises";
-import { compressVideo, getVideoCodec, reencodeToH264 } from "./video_helpers.js";
+import { compressVideo, getVideoCodec } from "./video_helpers.js";
 import type { Job } from "./job.js";
 import { client } from "./main.js";
 
@@ -37,7 +37,7 @@ export async function sendGallery(items: Item[], job: Job): Promise<void> {
                     const codec = await getVideoCodec(item.filepath);
                     if (codec !== "h264" || !item.filepath.endsWith(".mp4")) {
                         job.set_status(`Re-encoding video to h264 codec for Discord compatibility...`);
-                        item.filepath = await reencodeToH264(item.filepath);
+                        item.filepath = await compressVideo(item.filepath);
                     }
                 } catch {
                     await job.set_status(`❌ Error occured during re-encoding. Unable to send video.`);

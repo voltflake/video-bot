@@ -11,15 +11,18 @@ export async function extractWithGallerydl(url: URL): Promise<Item[]> {
         }
     }
 
-    let { stdout } = await runCommand(["gallery-dl", "--cookies", "../cookies.txt", "-d", ".", "-o", 'filename="{filename}.{extension}"', "--filesize-max", "50M", target_href], "downloads");
+    let { stdout } = await runCommand(["gallery-dl", "--config-ignore", "--no-skip", "--no-colors", "--Print", "file:{filename|id}.{extension}", "-D", ".", "-o", "output.mode=false", "--cookies", "../cookies.txt", "-o", 'filename="{filename|id}.{extension}"', "--filesize-max", "50M", target_href], "downloads");
 
     const filepaths = stdout.split("\n").map(line => line.trim()).filter(line => line);
-    if (!filepaths.length) throw new Error("Invalid output from gallery-gl");
+    if (!filepaths.length) throw new Error("Invalid output from gallery-dl");
 
     const result_items: Item[] = [];
     for (const filepath_raw of filepaths) {
-        // remove "./" prefix
-        const filepath = filepath_raw.startsWith("# ./") ? filepath_raw.slice(2) : filepath_raw;
+        let filepath = filepath_raw;
+        // convert backslashes to forward slashes (Windows)
+        filepath = filepath.replace(/\\/g, "/");
+        // remove leading "./" or "/" if present
+        filepath = filepath.replace(/^\.?\//, "");
         if (filepath.endsWith(".jpg") || filepath.endsWith(".png") || filepath.endsWith(".jpeg")) {
             result_items.push({ filepath: `downloads/${filepath}`, type: "image" });
             continue;
