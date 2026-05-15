@@ -6,6 +6,7 @@ import { extractWithYtdlp } from "./extractors/yt-dlp.js"
 import { extractWithGallerydl } from "./extractors/gallery-dl.js"
 import { extractWithSavegram } from "./extractors/safegram.js";
 import { extractWithSsstik } from "./extractors/ssstik.js";
+import { extractWithSavetik } from "./extractors/savetik.js";
 
 import { sendGallery } from "./send_gallery.js";
 
@@ -61,6 +62,7 @@ export class Job {
             this.extractors.push(extractWithYtdlp);
         } else if (url.hostname.endsWith("tiktok.com")) {
             this.extractors.push(extractWithSsstik);
+            this.extractors.push(extractWithSavetik);
             this.extractors.push(extractWithGallerydl);
             this.extractors.push(extractWithYtdlp);
         } else {
