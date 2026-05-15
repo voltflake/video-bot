@@ -1,3 +1,6 @@
+.vscode
 build
 node_modules
 downloads
+start.ps1
+start.sh

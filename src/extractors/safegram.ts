@@ -4,7 +4,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 export async function extractWithSavegram(url: URL): Promise<Item[]> {
     await mkdir("downloads", { recursive: true });
 
-    const response = await (await fetch("https://savegram.app/en/instagram-video-downloader")).text();
+    const response = await (await fetch("https://savefast.app/en")).text();
 
     const k_exp = response.match(/k_exp="([^"]+)"/)![1];
     const k_token = response.match(/k_token="([^"]+)"/)![1];
@@ -16,8 +16,8 @@ export async function extractWithSavegram(url: URL): Promise<Item[]> {
         throw new Error("Failed to extract k_exp or k_token");
     }
 
-    //make a POST request to https://savegram.app/en/instagram-video-downloader with form data k_exp, k_token, t, lang, v, q in formdata format
-    const postResponse = await fetch("https://savegram.app/api/ajaxSearch", {
+    //make a POST request to https://savefast.app/en/instagram-video-downloader with form data k_exp, k_token, t, lang, v, q in formdata format
+    const postResponse = await fetch("https://savefast.app/api/ajaxSearch", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({ k_exp, k_token, q, t, lang, v })
