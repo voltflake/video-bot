@@ -74,7 +74,10 @@ function extractURL(text: string): URL {
     const matches = text.match(urlRegex);
     if (!matches) throw new Error("No links were found in message");
     for (const match of matches) {
-        const url = new URL(match);
+        let url = new URL(match);
+        if (url.hostname.endsWith("kkinstagram.com")) {
+            url.hostname = url.hostname.replace("kkinstagram.com", "instagram.com");
+        }
         if (url.hostname.endsWith("tiktok.com")) return url;
         if (url.hostname.endsWith("instagram.com")) return url;
         if (url.hostname.endsWith("youtube.com") || url.hostname.endsWith("youtu.be")) {
