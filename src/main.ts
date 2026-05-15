@@ -5,7 +5,7 @@ import type { Item } from "./util.js";
 console.info("Feedback and bug reports: https://github.com/voltflake/video-bot/issues/new");
 
 const bot_token = process.env["DISCORD_TOKEN"];
-if (!bot_token) {
+if (!bot_token || bot_token.trim() === "") {
     console.error("Discord bot token does not exist. Exiting...");
     process.exit(1);
 }
